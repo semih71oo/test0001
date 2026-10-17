@@ -1,2 +1,4 @@
-name = "test0242"
+name = "test0521"
+main = "@tanstack/react-start/server-entry"
 compatibility_date = "2026-10-17"
+compatibility_flags = ["nodejs_compat"]
