@@ -1,2 +1,4 @@
-name = "semih-algan"
+name = "test0242"
+main = "./dist/server/server.js"
+assets = { directory = "./dist/client", not_found_handling = "single-page-application" }
 compatibility_date = "2026-10-17"
