@@ -1,3 +1,12 @@
+packages:
+  - "."
+allowBuilds:
+  '@tanstack/react-start': true
+  '@tanstack/router-plugin': true
+  esbuild: true
+  workerd: true
 onlyBuiltDependencies:
   - esbuild
   - workerd
+  - '@tanstack/react-start'
+  - '@tanstack/router-plugin'
