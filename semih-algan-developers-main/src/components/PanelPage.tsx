@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { ArrowLeft, ArrowUpRight, Check, CheckCheck, Code2, Copy, KeyRound, LayoutDashboard, LockKeyhole, LogOut, Pencil, Plus, ShieldCheck, Trash2, Users, X } from 'lucide-react'
-import { hydrateSession, logout, updateUser } from '../lib/cloudflareAuth'
+import { hydrateSession, logout, updateUser } from '../lib/supabaseAuth'
 import { ApiError, communityApi, developerRoles } from '../lib/community'
 import type { Developer, DeveloperRole, Member, Session } from '../lib/community'
 import { DeveloperCards, RoleBadge } from './DeveloperBoard'

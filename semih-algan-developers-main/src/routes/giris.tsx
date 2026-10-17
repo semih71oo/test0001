@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { ArrowLeft, ArrowRight, Check, Code2, KeyRound, LockKeyhole, ShieldCheck } from 'lucide-react'
 import { PasswordField } from '../components/PasswordField'
-import { acceptInvite, handleAuthCallback, updateUser } from '../lib/cloudflareAuth'
+import { acceptInvite, handleAuthCallback, updateUser } from '../lib/supabaseAuth'
 import { communityApi } from '../lib/community'
 
 export const Route = createFileRoute('/giris')({ component: LoginPage, head: () => ({ meta: [{ title: 'Panele giriş — Semih Algan' }, { name: 'robots', content: 'noindex' }] }) })
