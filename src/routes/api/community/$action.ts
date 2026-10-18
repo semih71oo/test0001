@@ -134,6 +134,29 @@ async function findValidCode(rawCode: unknown) {
   return { ...row, hash }
 }
 
+/* ---------- yazılar, yorumlar, yasaklar ---------- */
+const IMAGE_RE = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/]+=*)$/
+const MAX_IMAGE_CHARS = 900_000
+const fmtDate = (ms: number) => new Date(ms).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' })
+
+const clientIp = (request: Request) => request.headers.get('CF-Connecting-IP') ?? 'unknown'
+// Ham IP saklanmaz; yalnızca tuzlu özet tutulur.
+const ipHashOf = (request: Request) => sha256(`sa-ip-v1:${clientIp(request)}`)
+
+async function isIpBanned(ipHash: string) {
+  return !!(await first('SELECT 1 FROM bans WHERE kind = \'ip\' AND ip_hash = ?1 AND (expires_at IS NULL OR expires_at > ?2) LIMIT 1', ipHash, Date.now()))
+}
+async function activeCommentBan(memberId: string) {
+  return first<{ expires_at: number | null }>(
+    'SELECT expires_at FROM bans WHERE kind = \'comment\' AND member_id = ?1 AND (expires_at IS NULL OR expires_at > ?2) ORDER BY expires_at IS NULL DESC, expires_at DESC LIMIT 1',
+    memberId, Date.now(),
+  )
+}
+async function voterKey(request: Request, s: SessionRow | null) {
+  return s ? `m:${s.id}` : `i:${await ipHashOf(request)}`
+}
+const queryParam = (request: Request, name: string) => new URL(request.url).searchParams.get(name) ?? ''
+
 /* ---------- eylemler ---------- */
 type Handler = (request: Request, body: any) => Promise<Response>
 
@@ -283,6 +306,213 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
     },
   },
 
+  /* ---------- herkese açık: yazılar ---------- */
+  posts: {
+    method: 'GET',
+    run: async () => {
+      const rows = await all<any>(
+        `SELECT p.id, p.title, substr(p.body, 1, 200) AS excerpt, p.created_at, p.updated_at,
+                EXISTS(SELECT 1 FROM post_images i WHERE i.post_id = p.id) AS has_image,
+                (SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id) AS likes,
+                (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comments
+           FROM posts p ORDER BY p.created_at DESC LIMIT 50`,
+      )
+      return json(rows.map(r => ({ id: r.id, title: r.title, excerpt: r.excerpt, createdAt: r.created_at, updatedAt: r.updated_at, hasImage: !!r.has_image, likes: r.likes, comments: r.comments })))
+    },
+  },
+
+  post: {
+    method: 'GET',
+    run: async request => {
+      const id = queryParam(request, 'id')
+      const p = await first<any>('SELECT id, title, body, created_at, updated_at, EXISTS(SELECT 1 FROM post_images i WHERE i.post_id = posts.id) AS has_image FROM posts WHERE id = ?1', id)
+      if (!p) throw new HttpError('Yazı bulunamadı.', 404)
+      const s = await currentSession(request)
+      const voter = await voterKey(request, s)
+      const likes = await first<{ n: number }>('SELECT COUNT(*) AS n FROM post_likes WHERE post_id = ?1', id)
+      const liked = await first('SELECT 1 FROM post_likes WHERE post_id = ?1 AND voter = ?2', id, voter)
+      const comments = await all<any>('SELECT c.id, c.body, c.created_at, m.username FROM comments c JOIN members m ON m.id = c.member_id WHERE c.post_id = ?1 ORDER BY c.created_at ASC LIMIT 500', id)
+      const ban = s ? await activeCommentBan(s.id) : null
+      return json({
+        id: p.id, title: p.title, body: p.body, createdAt: p.created_at, updatedAt: p.updated_at, hasImage: !!p.has_image,
+        likes: likes?.n ?? 0, liked: !!liked,
+        comments: comments.map(c => ({ id: c.id, body: c.body, createdAt: c.created_at, username: c.username })),
+        viewer: s ? { username: s.username, isAdmin: !!s.is_admin, commentBan: ban ? { until: ban.expires_at } : null } : null,
+      })
+    },
+  },
+
+  'post-image': {
+    method: 'GET',
+    run: async request => {
+      const row = await first<{ mime: string; data: string }>('SELECT mime, data FROM post_images WHERE post_id = ?1', queryParam(request, 'id'))
+      if (!row) throw new HttpError('Görsel bulunamadı.', 404)
+      // URL'deki v= değeri görsel her değiştiğinde yenilenir, bu yüzden uzun süre önbelleğe alınabilir.
+      return new Response(fromB64(row.data), { headers: { 'Content-Type': row.mime, 'Cache-Control': 'public, max-age=31536000, immutable' } })
+    },
+  },
+
+  // Misafir de beğenebilir: hesaplı kullanıcı hesabıyla, misafir IP özetiyle tek oy kullanır.
+  like: {
+    method: 'POST',
+    run: async (request, body) => {
+      await rateLimit(request, 'like', 60, 600)
+      const postId = String(body.postId ?? '')
+      if (!(await first('SELECT 1 FROM posts WHERE id = ?1', postId))) throw new HttpError('Yazı bulunamadı.', 404)
+      const voter = await voterKey(request, await currentSession(request))
+      const removed = await run('DELETE FROM post_likes WHERE post_id = ?1 AND voter = ?2', postId, voter)
+      let liked = false
+      if (removed.meta.changes === 0) {
+        await run('INSERT OR IGNORE INTO post_likes (post_id, voter, created_at) VALUES (?1, ?2, ?3)', postId, voter, Date.now())
+        liked = true
+      }
+      const n = await first<{ n: number }>('SELECT COUNT(*) AS n FROM post_likes WHERE post_id = ?1', postId)
+      return json({ liked, likes: n?.n ?? 0 })
+    },
+  },
+
+  // Yalnızca hesabı olanlar yorum yapabilir
+  comment: {
+    method: 'POST',
+    run: async (request, body) => {
+      const s = await requireSession(request)
+      const ban = await activeCommentBan(s.id)
+      if (ban) throw new HttpError(ban.expires_at ? `Yorum yapman ${fmtDate(ban.expires_at)} tarihine kadar kısıtlandı.` : 'Yorum yapman kalıcı olarak kısıtlandı.', 403)
+      await rateLimit(request, 'comment', 10, 600)
+      const text = String(body.body ?? '').trim()
+      if (text.length < 1 || text.length > 1000) throw new HttpError('Yorum 1–1000 karakter olmalı.')
+      const postId = String(body.postId ?? '')
+      if (!(await first('SELECT 1 FROM posts WHERE id = ?1', postId))) throw new HttpError('Yazı bulunamadı.', 404)
+      await run('INSERT INTO comments (id, post_id, member_id, body, ip_hash, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)', crypto.randomUUID(), postId, s.id, text, await ipHashOf(request), Date.now())
+      return json({ ok: true })
+    },
+  },
+
+  /* ---------- yönetici: yazılar ---------- */
+  'save-post': {
+    method: 'POST',
+    run: async (request, body) => {
+      await requireAdmin(request)
+      const title = String(body.title ?? '').trim()
+      const text = String(body.body ?? '').trim()
+      if (title.length < 3 || title.length > 120) throw new HttpError('Başlık 3–120 karakter olmalı.')
+      if (text.length < 1 || text.length > 10000) throw new HttpError('Metin 1–10.000 karakter olmalı.')
+      let image: { mime: string; data: string } | null = null
+      if (typeof body.image === 'string' && body.image) {
+        const m = body.image.length <= MAX_IMAGE_CHARS ? IMAGE_RE.exec(body.image) : null
+        if (!m) throw new HttpError('Fotoğraf geçersiz ya da çok büyük.')
+        image = { mime: m[1], data: m[2] }
+      }
+      const now = Date.now()
+      let id = String(body.id ?? '')
+      if (id) {
+        const updated = await run('UPDATE posts SET title = ?1, body = ?2, updated_at = ?3 WHERE id = ?4', title, text, now, id)
+        if (updated.meta.changes !== 1) throw new HttpError('Yazı bulunamadı.', 404)
+      } else {
+        id = crypto.randomUUID()
+        await run('INSERT INTO posts (id, title, body, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?4)', id, title, text, now)
+      }
+      if (image) await run('INSERT OR REPLACE INTO post_images (post_id, mime, data) VALUES (?1, ?2, ?3)', id, image.mime, image.data)
+      else if (body.removeImage) await run('DELETE FROM post_images WHERE post_id = ?1', id)
+      return json({ ok: true, id })
+    },
+  },
+
+  'delete-post': {
+    method: 'POST',
+    run: async (request, body) => {
+      await requireAdmin(request)
+      const id = String(body.id ?? '')
+      await DB().batch([
+        DB().prepare('DELETE FROM post_images WHERE post_id = ?1').bind(id),
+        DB().prepare('DELETE FROM post_likes WHERE post_id = ?1').bind(id),
+        DB().prepare('DELETE FROM comments WHERE post_id = ?1').bind(id),
+        DB().prepare('DELETE FROM posts WHERE id = ?1').bind(id),
+      ])
+      return json({ ok: true })
+    },
+  },
+
+  /* ---------- yönetici: moderasyon ---------- */
+  'comments-admin': {
+    method: 'GET',
+    run: async request => {
+      await requireAdmin(request)
+      const rows = await all<any>(
+        `SELECT c.id, c.body, c.created_at, c.ip_hash, m.id AS member_id, m.username, p.title AS post_title,
+                EXISTS(SELECT 1 FROM bans b WHERE b.kind = 'comment' AND b.member_id = m.id AND (b.expires_at IS NULL OR b.expires_at > ?1)) AS comment_banned
+           FROM comments c JOIN members m ON m.id = c.member_id JOIN posts p ON p.id = c.post_id
+          ORDER BY c.created_at DESC LIMIT 100`,
+        Date.now(),
+      )
+      return json(rows.map(r => ({ id: r.id, body: r.body, createdAt: r.created_at, username: r.username, memberId: r.member_id, postTitle: r.post_title, ipTag: String(r.ip_hash).slice(0, 8), commentBanned: !!r.comment_banned })))
+    },
+  },
+
+  'delete-comment': {
+    method: 'POST',
+    run: async (request, body) => {
+      await requireAdmin(request)
+      await run('DELETE FROM comments WHERE id = ?1', String(body.id ?? ''))
+      return json({ ok: true })
+    },
+  },
+
+  // kind: 'comment' (hesaba yorum yasağı) | 'ip' (bağlantı yasağı). hours boşsa süresiz.
+  // Hedef: commentId (yorumu yazan hesap / yorumun IP özeti) ya da memberId (yalnızca yorum yasağı).
+  ban: {
+    method: 'POST',
+    run: async (request, body) => {
+      await requireAdmin(request)
+      const kind = body.kind === 'ip' ? 'ip' : body.kind === 'comment' ? 'comment' : null
+      if (!kind) throw new HttpError('Geçersiz yasak türü.')
+      const hours = body.hours === null || body.hours === undefined || body.hours === '' ? null : Number(body.hours)
+      if (hours !== null && (!Number.isFinite(hours) || hours < 1 || hours > 24 * 365)) throw new HttpError('Süre 1 saat ile 1 yıl arasında olmalı. Süresiz için boş bırak.')
+      const expiresAt = hours === null ? null : Date.now() + Math.round(hours * 3600000)
+      const reason = String(body.reason ?? '').trim().slice(0, 200) || null
+      const comment = body.commentId ? await first<{ member_id: string; ip_hash: string }>('SELECT member_id, ip_hash FROM comments WHERE id = ?1', String(body.commentId)) : null
+      if (body.commentId && !comment) throw new HttpError('Yorum bulunamadı.', 404)
+      const id = crypto.randomUUID()
+      if (kind === 'comment') {
+        const memberId = comment?.member_id ?? String(body.memberId ?? '')
+        const target = await first<{ id: string; is_admin: number }>('SELECT id, is_admin FROM members WHERE id = ?1', memberId)
+        if (!target) throw new HttpError('Hesap bulunamadı.', 404)
+        if (target.is_admin) throw new HttpError('Yönetici hesabı yasaklanamaz.')
+        await run('DELETE FROM bans WHERE kind = \'comment\' AND member_id = ?1', target.id)
+        await run('INSERT INTO bans (id, kind, member_id, ip_hash, expires_at, reason, created_at) VALUES (?1, \'comment\', ?2, NULL, ?3, ?4, ?5)', id, target.id, expiresAt, reason, Date.now())
+      } else {
+        if (!comment) throw new HttpError('IP yasağı için bir yorum seçmelisin.')
+        if (comment.ip_hash === (await ipHashOf(request))) throw new HttpError('Kendi bağlantını yasaklayamazsın.')
+        await run('DELETE FROM bans WHERE kind = \'ip\' AND ip_hash = ?1', comment.ip_hash)
+        await run('INSERT INTO bans (id, kind, member_id, ip_hash, expires_at, reason, created_at) VALUES (?1, \'ip\', NULL, ?2, ?3, ?4, ?5)', id, comment.ip_hash, expiresAt, reason, Date.now())
+      }
+      return json({ ok: true })
+    },
+  },
+
+  bans: {
+    method: 'GET',
+    run: async request => {
+      await requireAdmin(request)
+      const rows = await all<any>(
+        `SELECT b.id, b.kind, b.ip_hash, b.expires_at, b.reason, b.created_at, m.username
+           FROM bans b LEFT JOIN members m ON m.id = b.member_id
+          WHERE b.expires_at IS NULL OR b.expires_at > ?1 ORDER BY b.created_at DESC`,
+        Date.now(),
+      )
+      return json(rows.map(r => ({ id: r.id, kind: r.kind, username: r.username ?? null, ipTag: r.ip_hash ? String(r.ip_hash).slice(0, 8) : null, expiresAt: r.expires_at, reason: r.reason, createdAt: r.created_at })))
+    },
+  },
+
+  unban: {
+    method: 'POST',
+    run: async (request, body) => {
+      await requireAdmin(request)
+      await run('DELETE FROM bans WHERE id = ?1', String(body.id ?? ''))
+      return json({ ok: true })
+    },
+  },
+
   // Tek seferlik: ilk admin hesabını oluşturur. SETUP_TOKEN secret'ı gerekir, admin varsa çalışmaz.
   bootstrap: {
     method: 'POST',
@@ -307,6 +537,11 @@ async function handle(request: Request, action: string) {
   try {
     const entry = Object.hasOwn(actions, action) ? actions[action] : undefined
     if (!entry || entry.method !== request.method) throw new HttpError('Bulunamadı.', 404)
+    // IP yasağı: yasaklı bağlantıdan hiçbir eylem çalışmaz (yönetici kendini kilitlemesin diye hariç)
+    if (await isIpBanned(await ipHashOf(request))) {
+      const viewer = await currentSession(request)
+      if (!viewer?.is_admin) throw new HttpError('Bu bağlantıdan erişim kısıtlandı.', 403)
+    }
     let body: any = {}
     if (request.method === 'POST') {
       // CSRF: aynı origin + JSON zorunlu
