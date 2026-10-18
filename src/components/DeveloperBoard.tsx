@@ -11,6 +11,14 @@ export function RoleBadge({ role }: { role: DeveloperRole }) {
   return <span className={`role-badge role-${index}`}><Icon size={13} />{role}</span>
 }
 
+const roleDescriptions: Record<DeveloperRole, string> = {
+  Kurucu: 'Projeyi başlatan ve yönünü belirleyen kişi.',
+  Admin: 'Siteyi ve hesapları yöneten ekip üyesi.',
+  Moderatör: 'Topluluğu ve içeriği düzenli tutar.',
+  Developer: 'Fikirleri çalışan koda dönüştürür.',
+  Tasarımcı: 'Arayüzü ve görünümü şekillendirir.',
+}
+
 const roleRank = (role: DeveloperRole) => {
   const index = developerRoles.indexOf(role)
   return index === -1 ? developerRoles.length : index
@@ -20,7 +28,7 @@ const initials = (name: string) => name.trim().split(/\s+/).slice(0, 2).map(part
 
 export function DeveloperCards({ developers }: { developers: Developer[] }) {
   if (!developers.length) return <div className="board-empty"><Users size={27} /><h3>Yeni bir ekip için yer var.</h3><p>Henüz geliştirici eklenmedi. Yönetici eklediğinde isimler ve roller burada görünecek.</p></div>
-  return <div className="developer-grid">{[...developers].sort((first, second) => roleRank(first.role) - roleRank(second.role)).map(developer => <article className="developer-card" key={developer.id}><div className="developer-monogram" aria-hidden="true">{initials(developer.name)}</div><RoleBadge role={developer.role} /><h3>{developer.name}</h3></article>)}</div>
+  return <div className="developer-grid">{[...developers].sort((first, second) => roleRank(first.role) - roleRank(second.role)).map(developer => <article className="developer-card" key={developer.id} style={{ minHeight: 0 }}><div className="developer-monogram" aria-hidden="true">{initials(developer.name)}</div><RoleBadge role={developer.role} /><h3>{developer.name}</h3><p style={{ margin: '8px 0 0', fontSize: '.95rem', lineHeight: 1.5, opacity: .7 }}>{roleDescriptions[developer.role] ?? ''}</p></article>)}</div>
 }
 
 export function DeveloperBoard() {
