@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { DeveloperBoard } from '../components/DeveloperBoard'
 import { ArrowDown, ArrowDownRight, ArrowRight, ArrowUpRight, Check, CheckCheck, ChevronRight, Code2, Copy, Dribbble, Mail, MapPin, Menu, Phone, Puzzle, Sparkles, X } from 'lucide-react'
 
@@ -10,6 +10,19 @@ export const Route = createFileRoute('/')({
 function HomePage() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [copyStatus, setCopyStatus] = useState('')
+  const [signedIn, setSignedIn] = useState<{ isAdmin: boolean } | null>(null)
+
+  useEffect(() => {
+    let active = true
+    fetch('/api/community/session', { credentials: 'same-origin', cache: 'no-store' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => { if (active && data) setSignedIn({ isAdmin: !!data.isAdmin }) })
+      .catch(() => undefined)
+    return () => { active = false }
+  }, [])
+
+  const panelHref = signedIn ? (signedIn.isAdmin ? '/admin' : '/panel') : '/giris'
+  const panelLabel = signedIn ? 'Panele git' : 'Panele giriş'
 
   async function copyEmail() {
     try {
@@ -38,7 +51,7 @@ function HomePage() {
           <a href="#hakkimda">Hakkımda</a>
           <a href="#pano">Geliştiriciler</a>
         </nav>
-        <a className="header-contact" href="/giris">Panele giriş <ArrowUpRight size={16} /></a>
+        <a className="header-contact" href={panelHref}>{panelLabel} <ArrowUpRight size={16} /></a>
         <button className="menu-toggle" type="button" aria-label={menuOpen ? 'Menüyü kapat' : 'Menüyü aç'} aria-expanded={menuOpen} aria-controls="mobile-nav" onClick={() => setMenuOpen(!menuOpen)}>
           {menuOpen ? <X /> : <Menu />}
         </button>
@@ -48,7 +61,7 @@ function HomePage() {
         <a href="#yazilimlar" onClick={closeMenu}>Yazılımlar · Yakında</a>
         <a href="#hakkimda" onClick={closeMenu}>Hakkımda</a>
         <a href="#pano" onClick={closeMenu}>Geliştiriciler</a>
-        <a href="/giris" onClick={closeMenu}>Panele giriş <ArrowUpRight size={17} /></a>
+        <a href={panelHref} onClick={closeMenu}>{panelLabel} <ArrowUpRight size={17} /></a>
         <a href="#iletisim" onClick={closeMenu}>İletişime geç <ArrowUpRight size={17} /></a>
       </nav>
       <main id="icerik">
@@ -96,4 +109,4 @@ function HomePage() {
       <footer className="container site-footer"><a className="brand footer-brand" href="#baslangic"><span className="brand-icon"><Code2 size={19} /></span><span>semih<span className="brand-light">algan</span>.</span></a><p>© {new Date().getFullYear()} Semih Algan. Özenle geliştirildi.</p><a className="back-top" href="#baslangic">Başa dön <ChevronRight size={16} /></a></footer>
     </div>
   )
-}
+  }
