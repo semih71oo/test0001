@@ -2,12 +2,11 @@ import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router'
 import { AuthCallbackRedirect } from '../components/AuthCallbackRedirect'
 import { NotFoundPage } from '../components/NotFoundPage'
 
-
 import '../styles.css'
 
 const siteName = 'Semih Algan — Yazılım & Fikirler'
 const siteDescription = 'Semih Algan’ın yazılım vitrini. Yeni yazılımlar yakında; geliştiriciyi tanıyın, fikirlerinizi paylaşın ve iletişime geçin.'
-const siteUrl = 'https://test27267272.netlify.app'
+const siteUrl = 'https://semihalgan.com.tr'
 const ogImage = `${siteUrl}/og-image.png`
 const ogImageAlt = 'semihalgan. — İyi fikirler, güçlü yazılımlar.'
 const personSchema = {
