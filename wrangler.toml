@@ -2,3 +2,7 @@ name = "test0521"
 main = "@tanstack/react-start/server-entry"
 compatibility_date = "2026-10-17"
 compatibility_flags = ["nodejs_compat"]
+[[d1_databases]]
+binding = "DB"
+database_name = "semihalgan-auth"
+database_id = "935ebcde-7581-4634-bdcb-ab3b991f6e6b"
