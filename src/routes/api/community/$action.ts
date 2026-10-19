@@ -306,6 +306,31 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
     },
   },
 
+  /* ---------- bakım modu ---------- */
+  maintenance: {
+    method: 'GET',
+    run: async request => {
+      const rows = await all<{ key: string; value: string }>('SELECT key, value FROM settings WHERE key IN (\'maintenance_on\', \'maintenance_message\')')
+      const map = Object.fromEntries(rows.map(r => [r.key, r.value]))
+      const viewer = await currentSession(request)
+      return json({ on: map.maintenance_on === '1', message: map.maintenance_message ?? '', viewerIsAdmin: !!viewer?.is_admin })
+    },
+  },
+
+  'set-maintenance': {
+    method: 'POST',
+    run: async (request, body) => {
+      await requireAdmin(request)
+      const on = body.on === true
+      const message = String(body.message ?? '').trim().slice(0, 200)
+      await DB().batch([
+        DB().prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (\'maintenance_on\', ?1)').bind(on ? '1' : '0'),
+        DB().prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (\'maintenance_message\', ?1)').bind(message),
+      ])
+      return json({ ok: true })
+    },
+  },
+
   /* ---------- herkese açık: yazılar ---------- */
   posts: {
     method: 'GET',
