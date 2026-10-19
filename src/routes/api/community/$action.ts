@@ -289,7 +289,10 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
   // E-posta servisi olmadığı için şifre sıfırlama şimdilik yok; arayüzü bozmasın diye sabit cevap
   recover: {
     method: 'POST',
-    run: async () => json({ ok: true }),
+    run: async () => {
+      if (await isMaintenanceOn()) throw new HttpError('Site bakımda. Şu an şifre sıfırlama yapılamıyor.', 503)
+      return json({ ok: true })
+    },
   },
 
   'save-developer': {
