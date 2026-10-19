@@ -25,7 +25,7 @@ function PostsPage() {
 
   return (
     <PublicShell>
-      <span className="section-eyebrow">YAZILAR</span>
+      <span className="section-eyebrow" style={{ display: 'block' }}>YAZILAR</span>
       <h1 style={{ margin: '8px 0 28px' }}>Yazılar<span className="heading-dot">.</span></h1>
       {state === 'loading' && <p role="status">Yükleniyor…</p>}
       {state === 'error' && <p className="message message-error" role="alert">Yazılar şu an yüklenemiyor.</p>}
