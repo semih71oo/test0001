@@ -1,5 +1,6 @@
 import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router'
 import { AuthCallbackRedirect } from '../components/AuthCallbackRedirect'
+import { MaintenanceGate } from '../components/MaintenanceGate'
 import { NotFoundPage } from '../components/NotFoundPage'
 
 import '../styles.css'
@@ -111,6 +112,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         <AuthCallbackRedirect />
+        <MaintenanceGate />
         {children}
         <Scripts />
       </body>
