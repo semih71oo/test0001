@@ -63,7 +63,7 @@ function PostPage() {
 
   return (
     <PublicShell>
-      <small style={{ opacity: .6 }}>{formatDate(post.createdAt)}</small>
+      <small style={{ display: 'block', opacity: .6 }}>{formatDate(post.createdAt)}</small>
       <h1 style={{ margin: '6px 0 20px' }}>{post.title}</h1>
       {post.hasImage && <img src={imageUrl(post.id, post.updatedAt)} alt="" style={{ width: '100%', borderRadius: 16, marginBottom: 22 }} />}
       <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.7, fontSize: '1.05rem' }}>{post.body}</div>
