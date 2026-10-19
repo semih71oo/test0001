@@ -50,6 +50,7 @@ function HomePage() {
           <a href="#yazilimlar">Yazılımlar <span className="nav-badge">Yakında</span></a>
           <a href="#hakkimda">Hakkımda</a>
           <a href="#pano">Geliştiriciler</a>
+          <a href="/yazilar">Yazılar</a>
         </nav>
         <a className="header-contact" href={panelHref}>{panelLabel} <ArrowUpRight size={16} /></a>
         <button className="menu-toggle" type="button" aria-label={menuOpen ? 'Menüyü kapat' : 'Menüyü aç'} aria-expanded={menuOpen} aria-controls="mobile-nav" onClick={() => setMenuOpen(!menuOpen)}>
@@ -61,6 +62,7 @@ function HomePage() {
         <a href="#yazilimlar" onClick={closeMenu}>Yazılımlar · Yakında</a>
         <a href="#hakkimda" onClick={closeMenu}>Hakkımda</a>
         <a href="#pano" onClick={closeMenu}>Geliştiriciler</a>
+        <a href="/yazilar" onClick={closeMenu}>Yazılar</a>
         <a href={panelHref} onClick={closeMenu}>{panelLabel} <ArrowUpRight size={17} /></a>
         <a href="#iletisim" onClick={closeMenu}>İletişime geç <ArrowUpRight size={17} /></a>
       </nav>
@@ -109,4 +111,4 @@ function HomePage() {
       <footer className="container site-footer"><a className="brand footer-brand" href="#baslangic"><span className="brand-icon"><Code2 size={19} /></span><span>semih<span className="brand-light">algan</span>.</span></a><p>© {new Date().getFullYear()} Semih Algan. Özenle geliştirildi.</p><a className="back-top" href="#baslangic">Başa dön <ChevronRight size={16} /></a></footer>
     </div>
   )
-  }
+}
