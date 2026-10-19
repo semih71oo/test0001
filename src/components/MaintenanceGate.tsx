@@ -3,8 +3,8 @@ import { ROBOT_REPAIR_SVG } from './robotRepairSvg'
 
 type MaintenanceState = { on: boolean; message: string; viewerIsAdmin: boolean }
 
-// Bakım modunda bile açık kalan sayfalar (yönetici giriş yapabilsin diye)
-const OPEN_PREFIXES = ['/admin', '/panel', '/giris']
+// Bakım modunda bile açık kalan sayfalar (yönetici giriş yapabilsin diye). Normal kullanıcı girişi sunucuda engellenir.
+const OPEN_PREFIXES = ['/admin', '/giris']
 
 export function MaintenanceGate() {
   const [state, setState] = useState<MaintenanceState | null>(null)
