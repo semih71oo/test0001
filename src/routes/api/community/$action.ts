@@ -80,15 +80,22 @@ function readCookie(request: Request, name: string) {
 
 type SessionRow = { id: string; username: string; email: string; status: 'pending' | 'active'; is_admin: number; created_at: string }
 
+// Bakım modu açıkken yalnızca yönetici oturumları geçerli sayılır.
+async function isMaintenanceOn() {
+  const row = await first<{ value: string }>('SELECT value FROM settings WHERE key = \'maintenance_on\'')
+  return row?.value === '1'
+}
 async function currentSession(request: Request) {
   const token = readCookie(request, COOKIE)
   if (!token) return null
-  return first<SessionRow>(
+  const row = await first<SessionRow>(
     `SELECT m.id, m.username, m.email, m.status, m.is_admin, m.created_at
        FROM sessions s JOIN members m ON m.id = s.member_id
       WHERE s.token_hash = ?1 AND s.expires_at > ?2 AND m.status = 'active'`,
     await sha256(token), Date.now(),
   )
+  if (row && !row.is_admin && (await isMaintenanceOn())) return null
+  return row
 }
 async function requireSession(request: Request) {
   const s = await currentSession(request)
@@ -248,6 +255,7 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
         ? await first<{ id: string; password_hash: string }>('SELECT id, password_hash FROM members WHERE email = ?1 AND is_admin = 1 AND status = \'active\'', identifier)
         : await first<{ id: string; password_hash: string }>('SELECT id, password_hash FROM members WHERE username = ?1 AND is_admin = 0 AND status = \'active\'', identifier)
       if (!(await verifyPassword(password, member?.password_hash ?? null)) || !member) throw new HttpError('Kullanıcı adı veya şifre hatalı.', 401)
+      if (!founder && (await isMaintenanceOn())) throw new HttpError('Site bakımda. Şu an yalnızca yönetici giriş yapabilir.', 503)
       const token = randomToken()
       await run('INSERT INTO sessions (token_hash, member_id, expires_at) VALUES (?1, ?2, ?3)', await sha256(token), member.id, Date.now() + SESSION_TTL_MS)
       return json({ ok: true }, 200, {
