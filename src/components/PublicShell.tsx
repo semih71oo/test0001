@@ -14,7 +14,7 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
         </nav>
       </header>
       <main className="container section-space" style={{ maxWidth: 760 }}>
-        <a className="back-link" href="/" style={{ display: 'inline-flex', gap: 6, alignItems: 'center', marginBottom: 24 }}><ArrowLeft size={15} />Ana sayfa</a>
+        <a className="back-link" href="/" style={{ display: 'flex', width: 'fit-content', gap: 6, alignItems: 'center', marginBottom: 24 }}><ArrowLeft size={15} />Ana sayfa</a>
         {children}
       </main>
     </div>
