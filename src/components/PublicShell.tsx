@@ -1,4 +1,5 @@
 import { ArrowLeft, Code2 } from 'lucide-react'
+import { legalLinks } from '../lib/legal'
 
 export function PublicShell({ children }: { children: React.ReactNode }) {
   return (
@@ -17,6 +18,9 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
         <a className="back-link" href="/" style={{ display: 'flex', width: 'fit-content', gap: 6, alignItems: 'center', marginBottom: 24 }}><ArrowLeft size={15} />Ana sayfa</a>
         {children}
       </main>
+      <footer className="container" style={{ maxWidth: 760, display: 'flex', flexWrap: 'wrap', gap: '8px 18px', padding: '24px 0 40px', opacity: .75, fontSize: '.9rem' }}>
+        {legalLinks.map(link => <a key={link.path} href={link.path}>{link.label}</a>)}
+      </footer>
     </div>
   )
 }
