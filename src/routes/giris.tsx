@@ -1,5 +1,5 @@
 // @ts-nocheck
-// src/routes/giris.tsx  —  tam dosya (şifre sıfırlama bağlantısı eklendi, kendi başına çalışır)
+// src/routes/giris.tsx
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
@@ -48,6 +48,8 @@ function LoginPage() {
   const [callbackBusy, setCallbackBusy] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [acceptKvkk, setAcceptKvkk] = useState(false);
   const callbackStarted = useRef(false);
   useEffect(() => {
     if (callbackStarted.current) return;
@@ -67,6 +69,10 @@ function LoginPage() {
     setPassword("");
     setConfirmation("");
     if (next !== "password") setCode("");
+    if (next !== "code" && next !== "password") {
+      setAcceptTerms(false);
+      setAcceptKvkk(false);
+    }
   }
   async function submit(event) {
     event.preventDefault();
@@ -74,6 +80,10 @@ function LoginPage() {
     setNotice("");
     if (["password", "invite", "recovery"].includes(step) && password !== confirmation) {
       setError("Şifreler eşleşmiyor.");
+      return;
+    }
+    if (["code", "password"].includes(step) && !(acceptTerms && acceptKvkk)) {
+      setError("Devam etmek için Üyelik Sözleşmesi’ni ve KVKK Aydınlatma Metni’ni onaylaman gerekiyor.");
       return;
     }
     setBusy(true);
@@ -218,6 +228,26 @@ function LoginPage() {
             jsx("p", { className: "field-hint", children: "En az 12 karakter kullan. Kelimeleri, rakamları ve işaretleri birleştir." })
           ] }),
           step === "login" && jsx("button", { type: "button", className: "text-action forgot-link", onClick: () => changeStep("forgot"), children: "Şifremi unuttum" }),
+          ["code", "password"].includes(step) && jsxs("div", { className: "consent-box", style: { display: "grid", gap: 12, margin: "6px 0 4px" }, children: [
+            jsxs("label", { htmlFor: "accept-terms", style: { display: "flex", gap: 10, alignItems: "flex-start", lineHeight: 1.5, fontSize: ".92rem", cursor: "pointer" }, children: [
+              jsx("input", { id: "accept-terms", name: "accept-terms", type: "checkbox", checked: acceptTerms, onChange: (event) => setAcceptTerms(event.target.checked), required: true, style: { width: 20, height: 20, marginTop: 2, flexShrink: 0 } }),
+              jsxs("span", { children: [
+                jsx("a", { href: "/uyelik-sozlesmesi", target: "_blank", rel: "noopener noreferrer", children: "Üyelik Sözleşmesi" }),
+                " ve ",
+                jsx("a", { href: "/kullanim-kosullari", target: "_blank", rel: "noopener noreferrer", children: "Kullanım Koşulları" }),
+                "’nı okudum, kabul ediyorum."
+              ] })
+            ] }),
+            jsxs("label", { htmlFor: "accept-kvkk", style: { display: "flex", gap: 10, alignItems: "flex-start", lineHeight: 1.5, fontSize: ".92rem", cursor: "pointer" }, children: [
+              jsx("input", { id: "accept-kvkk", name: "accept-kvkk", type: "checkbox", checked: acceptKvkk, onChange: (event) => setAcceptKvkk(event.target.checked), required: true, style: { width: 20, height: 20, marginTop: 2, flexShrink: 0 } }),
+              jsxs("span", { children: [
+                jsx("a", { href: "/kvkk", target: "_blank", rel: "noopener noreferrer", children: "KVKK Aydınlatma Metni" }),
+                "’ni ve ",
+                jsx("a", { href: "/gizlilik", target: "_blank", rel: "noopener noreferrer", children: "Gizlilik ve Çerez Politikası" }),
+                "’nı okudum, anladım."
+              ] })
+            ] })
+          ] }),
           jsxs("div", { className: "form-feedback", "aria-live": "polite", "aria-atomic": "true", children: [
             error && jsx("p", { className: "message message-error", role: "alert", children: error }),
             notice && jsx("p", { className: "message message-success", role: "status", children: notice })
@@ -248,9 +278,12 @@ function LoginPage() {
     ] }),
     jsxs("footer", { className: "account-footer container", children: [
       "Kişisel bir alan. Ortak bir merak.",
-      jsxs("span", { children: [
-        "Semih Algan © ",
-        (new Date()).getFullYear()
+      jsxs("span", { style: { display: "flex", flexWrap: "wrap", gap: "6px 14px" }, children: [
+        jsx("a", { href: "/kvkk", children: "KVKK" }),
+        jsx("a", { href: "/gizlilik", children: "Gizlilik ve Çerezler" }),
+        jsx("a", { href: "/kullanim-kosullari", children: "Kullanım Koşulları" }),
+        jsx("a", { href: "/uyelik-sozlesmesi", children: "Üyelik Sözleşmesi" }),
+        jsxs("span", { children: ["Semih Algan © ", (new Date()).getFullYear()] })
       ] })
     ] })
   ] });
