@@ -29,7 +29,7 @@ function HomePage() {
       await navigator.clipboard.writeText('71.semih.algan@gmail.com')
       setCopyStatus('E-posta adresi kopyalandı.')
     } catch {
-      setCopyStatus('Kopyalama yapılamadı. E-posta adresini seçerek kopyalayabilirsin.')
+      setCopyStatus('Kopyalama yapılamadı. E-posta adresini seçerek kopyalandığını doğrulayabilirsin.')
     }
   }
 
@@ -108,7 +108,19 @@ function HomePage() {
         </section>
         <section className="contact-section" id="iletisim" aria-labelledby="contact-title"><div className="container contact-inner"><div className="contact-intro"><div className="eyebrow section-eyebrow">03 / İLETİŞİM</div><h2 id="contact-title">Bir fikirle<br />başlayabiliriz<span>.</span></h2><p>Bir sorunun, önerin ya da paylaşmak istediğin<br className="desktop-break" /> bir fikrin varsa, bana ulaşabilirsin.</p><span className="contact-signature">Güzel işler, bir merhabayla başlar. <ArrowDownRight size={22} /></span></div><div className="contact-options"><div className="contact-card"><div className="contact-icon"><Mail size={22} /></div><div className="contact-detail"><span>E-POSTA GÖNDER</span><a href="mailto:71.semih.algan@gmail.com">71.semih.algan@gmail.com <ArrowUpRight size={18} /></a></div><button type="button" className="copy-button" aria-label="E-posta adresini kopyala" onClick={copyEmail}>{copyStatus === 'E-posta adresi kopyalandı.' ? <Check size={18} /> : <Copy size={18} />}</button></div><div className="contact-card"><div className="contact-icon"><Phone size={22} /></div><div className="contact-detail"><span>TELEFONLA ULAŞ</span><a href="tel:+905333557971">0533 355 79 71 <ArrowUpRight size={18} /></a></div></div><p className="copy-status" role="status">{copyStatus}</p></div></div></section>
       </main>
-      <footer className="container site-footer"><a className="brand footer-brand" href="#baslangic"><span className="brand-icon"><Code2 size={19} /></span><span>semih<span className="brand-light">algan</span>.</span></a><p>© {new Date().getFullYear()} Semih Algan. Özenle geliştirildi.</p><a className="back-top" href="#baslangic">Başa dön <ChevronRight size={16} /></a></footer>
+      <footer className="container site-footer">
+        <a className="brand footer-brand" href="#baslangic">
+          <span className="brand-icon"><Code2 size={19} /></span>
+          <span>semih<span className="brand-light">algan</span>.</span>
+        </a>
+        <p>© {new Date().getFullYear()} Semih Algan. Özenle geliştirildi.</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', fontSize: '0.875rem' }}>
+          <a href="/kvkk" style={{ color: 'currentColor', opacity: 0.75, textDecoration: 'none' }}>KVKK</a>
+          <a href="/gizlilik" style={{ color: 'currentColor', opacity: 0.75, textDecoration: 'none' }}>Gizlilik</a>
+          <a href="/kullanim-kosullari" style={{ color: 'currentColor', opacity: 0.75, textDecoration: 'none' }}>Koşullar</a>
+        </div>
+        <a className="back-top" href="#baslangic">Başa dön <ChevronRight size={16} /></a>
+      </footer>
     </div>
   )
 }
