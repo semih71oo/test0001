@@ -1,5 +1,4 @@
 import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router'
-import { AuthCallbackRedirect } from '../components/AuthCallbackRedirect'
 import { MaintenanceGate } from '../components/MaintenanceGate'
 import { NotFoundPage } from '../components/NotFoundPage'
 
@@ -34,64 +33,21 @@ export const Route = createRootRoute({
       { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap' },
     ],
     meta: [
-      {
-        charSet: 'utf-8',
-      },
-      {
-        name: 'viewport',
-        content: 'width=device-width, initial-scale=1',
-      },
-      {
-        title: siteName,
-      },
-      {
-        name: 'description',
-        content: siteDescription,
-      },
-      {
-        property: 'og:title',
-        content: siteName,
-      },
-      {
-        property: 'og:description',
-        content: siteDescription,
-      },
-      {
-        property: 'og:type',
-        content: 'website',
-      },
-      {
-        property: 'og:url',
-        content: siteUrl,
-      },
-      {
-        property: 'og:image',
-        content: ogImage,
-      },
-      {
-        property: 'og:image:width',
-        content: '1200',
-      },
-      {
-        property: 'og:image:height',
-        content: '630',
-      },
-      {
-        property: 'og:image:alt',
-        content: ogImageAlt,
-      },
-      {
-        name: 'twitter:card',
-        content: 'summary_large_image',
-      },
-      {
-        name: 'twitter:image',
-        content: ogImage,
-      },
-      {
-        name: 'twitter:image:alt',
-        content: ogImageAlt,
-      },
+      { charSet: 'utf-8' },
+      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+      { title: siteName },
+      { name: 'description', content: siteDescription },
+      { property: 'og:title', content: siteName },
+      { property: 'og:description', content: siteDescription },
+      { property: 'og:type', content: 'website' },
+      { property: 'og:url', content: siteUrl },
+      { property: 'og:image', content: ogImage },
+      { property: 'og:image:width', content: '1200' },
+      { property: 'og:image:height', content: '630' },
+      { property: 'og:image:alt', content: ogImageAlt },
+      { name: 'twitter:card', content: 'summary_large_image' },
+      { name: 'twitter:image', content: ogImage },
+      { name: 'twitter:image:alt', content: ogImageAlt },
     ],
     scripts: [
       {
@@ -111,7 +67,6 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        <AuthCallbackRedirect />
         <MaintenanceGate />
         {children}
         <Scripts />
