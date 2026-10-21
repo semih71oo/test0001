@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { ArrowLeft, ArrowUpRight, Check, CheckCheck, Code2, Copy, FileText, KeyRound, LayoutDashboard, LockKeyhole, LogOut, Pencil, Plus, ShieldAlert, ShieldCheck, Wrench, Trash2, Users, X } from 'lucide-react'
-import { hydrateSession, logout, updateUser } from '../lib/cloudflareAuth'
 import { ApiError, communityApi, developerRoles } from '../lib/community'
 import type { Developer, DeveloperRole, Member, Session } from '../lib/community'
 import { DeveloperCards, RoleBadge } from './DeveloperBoard'
@@ -32,7 +31,6 @@ export function PanelPage({ adminOnly = false }: { adminOnly?: boolean }) {
     let active = true
     async function load() {
       try {
-        await hydrateSession()
         const currentSession = await communityApi<Session>('session')
         if (!active) return
         if (adminOnly && !currentSession.isAdmin) throw new ApiError('Admin paneline erişmek için yönetici yetkisi gerekiyor.', 403)
@@ -58,7 +56,6 @@ export function PanelPage({ adminOnly = false }: { adminOnly?: boolean }) {
     setError('')
     try {
       await communityApi('logout', {})
-      await logout().catch(() => undefined)
       window.location.assign('/giris')
     } catch {
       setError('Çıkış tamamlanamadı. Lütfen tekrar dene.')
@@ -97,8 +94,7 @@ function PasswordSettings() {
     if (password !== confirmation) { setError('Şifreler eşleşmiyor.'); return }
     setBusy(true)
     try {
-      await hydrateSession()
-      await updateUser({ password })
+      await communityApi('change-password', { password })
       setNotice('Şifren güvenle güncellendi.')
     } catch {
       setError('Şifre güncellenemedi. Oturumunu ve bağlantını kontrol et.')
