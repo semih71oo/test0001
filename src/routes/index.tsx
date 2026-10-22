@@ -51,6 +51,7 @@ function HomePage() {
           <a href="#hakkimda">Hakkımda</a>
           <a href="#pano">Geliştiriciler</a>
           <a href="/yazilar">Yazılar</a>
+          <a href="/guncellemeler">Güncellemeler</a>
         </nav>
         <a className="header-contact" href={panelHref}>{panelLabel} <ArrowUpRight size={16} /></a>
         <button className="menu-toggle" type="button" aria-label={menuOpen ? 'Menüyü kapat' : 'Menüyü aç'} aria-expanded={menuOpen} aria-controls="mobile-nav" onClick={() => setMenuOpen(!menuOpen)}>
@@ -63,6 +64,7 @@ function HomePage() {
         <a href="#hakkimda" onClick={closeMenu}>Hakkımda</a>
         <a href="#pano" onClick={closeMenu}>Geliştiriciler</a>
         <a href="/yazilar" onClick={closeMenu}>Yazılar</a>
+        <a href="/guncellemeler" onClick={closeMenu}>Güncellemeler</a>
         <a href={panelHref} onClick={closeMenu}>{panelLabel} <ArrowUpRight size={17} /></a>
         <a href="#iletisim" onClick={closeMenu}>İletişime geç <ArrowUpRight size={17} /></a>
       </nav>
@@ -115,6 +117,7 @@ function HomePage() {
         </a>
         <p>© {new Date().getFullYear()} Semih Algan. Özenle geliştirildi.</p>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', fontSize: '0.875rem' }}>
+          <a href="/guncellemeler" style={{ color: 'currentColor', opacity: 0.75, textDecoration: 'none' }}>Güncellemeler</a>
           <a href="/kvkk" style={{ color: 'currentColor', opacity: 0.75, textDecoration: 'none' }}>KVKK</a>
           <a href="/gizlilik" style={{ color: 'currentColor', opacity: 0.75, textDecoration: 'none' }}>Gizlilik</a>
           <a href="/kullanim-kosullari" style={{ color: 'currentColor', opacity: 0.75, textDecoration: 'none' }}>Koşullar</a>
