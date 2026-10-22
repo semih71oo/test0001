@@ -1,6 +1,29 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
-import { ArrowLeft, ArrowUpRight, Check, CheckCheck, Code2, Copy, FileText, KeyRound, LayoutDashboard, LockKeyhole, LogOut, Pencil, Plus, ShieldAlert, ShieldCheck, Sparkles, Wrench, Trash2, Users, X } from 'lucide-react'
+import {
+  ArrowLeft,
+  ArrowUpRight,
+  Check,
+  CheckCheck,
+  ChevronDown,
+  ChevronUp,
+  Code2,
+  Copy,
+  FileText,
+  KeyRound,
+  LayoutDashboard,
+  LockKeyhole,
+  LogOut,
+  Pencil,
+  Plus,
+  ShieldAlert,
+  ShieldCheck,
+  Sparkles,
+  Trash2,
+  Users,
+  Wrench,
+  X,
+} from 'lucide-react'
 import { ApiError, communityApi, developerRoles, accountRoles } from '../lib/community'
 import type { Developer, DeveloperRole, Member, Session } from '../lib/community'
 import { DeveloperCards, RoleBadge } from './DeveloperBoard'
@@ -8,9 +31,17 @@ import { PasswordField } from './PasswordField'
 import { MaintenanceManager } from './MaintenanceManager'
 import { ModerationManager } from './ModerationManager'
 import { PostManager } from './PostManager'
-import { UpdateManager } from './UpdateManager'
+import { formatDate } from '../lib/posts'
 
 type PanelTab = 'overview' | 'developers' | 'members' | 'posts' | 'updates' | 'moderation' | 'maintenance'
+
+type SiteUpdate = {
+  id: number
+  title: string
+  description?: string | null
+  createdAt: number
+  updatedAt: number
+}
 
 export function PanelPage({ adminOnly = false }: { adminOnly?: boolean }) {
   const [session, setSession] = useState<Session | null>(null)
@@ -71,7 +102,195 @@ export function PanelPage({ adminOnly = false }: { adminOnly?: boolean }) {
     return <div className="panel-gate container"><ShieldCheck size={42} /><span className="section-eyebrow">GÜVENLİ ÇALIŞMA ALANI</span><h1>{adminDenied ? 'Bu alan yetkililere özel.' : status === 403 ? 'Hesabın henüz hazır değil.' : status === 401 ? 'Önce bir merhaba.' : 'Panel şu an yüklenemiyor.'}</h1><p role="alert">{error}</p><a className="button button-primary" href={adminDenied ? '/panel' : signInRequired ? '/giris' : getPanelPath(adminOnly)}>{adminDenied ? 'Kullanıcı paneline dön' : signInRequired ? 'Girişe dön' : 'Tekrar dene'}<ArrowUpRight size={18} /></a><a className="back-link" href="/"><ArrowLeft size={15} />Ana sayfa</a></div>
   }
 
-  return <div className="workspace"><a className="skip-link" href="#panel-content">İçeriğe geç</a><header className="workspace-header"><a className="brand" href="/"><span className="brand-icon"><Code2 size={22} /></span><span>semih<span className="brand-light">algan</span>.</span></a><div className="workspace-header-actions"><a className="back-link" href="/#pano">Siteyi görüntüle <ArrowUpRight size={15} /></a><button className="logout-button" type="button" disabled={loggingOut} onClick={signOut}><LogOut size={16} /><span>{loggingOut ? 'Çıkılıyor…' : 'Çıkış yap'}</span></button></div></header><div className="workspace-layout"><aside className="workspace-sidebar"><div className="workspace-label"><span className="status-dot" />{adminOnly ? 'YÖNETİM ALANI' : 'KİŞİSEL ALAN'}</div><nav aria-label="Panel menüsü"><button type="button" className={tab === 'overview' ? 'sidebar-link selected' : 'sidebar-link'} aria-current={tab === 'overview' ? 'page' : undefined} onClick={() => setTab('overview')}><LayoutDashboard size={18} />Genel bakış</button>{adminOnly ? <>{session.isAdmin && <button type="button" className={tab === 'developers' ? 'sidebar-link selected' : 'sidebar-link'} aria-current={tab === 'developers' ? 'page' : undefined} onClick={() => setTab('developers')}><Code2 size={18} />Geliştiriciler<span>{developers.length}</span></button>}{session.isAdmin && <button type="button" className={tab === 'members' ? 'sidebar-link selected' : 'sidebar-link'} aria-current={tab === 'members' ? 'page' : undefined} onClick={() => setTab('members')}><KeyRound size={18} />Kullanıcılar<span>{members.length}</span></button>}{session.isAdmin && <button type="button" className={tab === 'posts' ? 'sidebar-link selected' : 'sidebar-link'} aria-current={tab === 'posts' ? 'page' : undefined} onClick={() => setTab('posts')}><FileText size={18} />Yazılar</button>}{session.isAdmin && <button type="button" className={tab === 'updates' ? 'sidebar-link selected' : 'sidebar-link'} aria-current={tab === 'updates' ? 'page' : undefined} onClick={() => setTab('updates')}><Sparkles size={18} />Güncellemeler</button>}<button type="button" className={tab === 'moderation' ? 'sidebar-link selected' : 'sidebar-link'} aria-current={tab === 'moderation' ? 'page' : undefined} onClick={() => setTab('moderation')}><ShieldAlert size={18} />Moderasyon</button>{session.isAdmin && <button type="button" className={tab === 'maintenance' ? 'sidebar-link selected' : 'sidebar-link'} aria-current={tab === 'maintenance' ? 'page' : undefined} onClick={() => setTab('maintenance')}><Wrench size={18} />Bakım modu</button>}<a className="sidebar-link" href="/panel"><Users size={18} />Kullanıcı panelim<ArrowUpRight size={14} /></a></> : session.isMod && <a className="sidebar-link" href="/admin"><ShieldCheck size={18} />Yönetim paneli<ArrowUpRight size={14} /></a>}</nav><div className="sidebar-note"><LockKeyhole size={19} /><p>{adminOnly ? 'Pano rolleri görünüm içindir. Yönetim yetkileri yalnızca sistem yöneticisi tarafından atanır.' : 'Şifren yalnızca sana ait. Bu alanda güvenle güncelleyebilirsin.'}</p></div><div className="sidebar-profile"><span className="profile-monogram">{session.profile.username.slice(0, 2).toUpperCase()}</span><div><strong>{session.profile.username}</strong><span>{session.profile.role}</span></div></div></aside><main className="workspace-main" id="panel-content"><div className="workspace-heading"><div><span className="section-eyebrow">{adminOnly ? 'YÖNETİM PANELİ' : 'KULLANICI PANELİ'} / {tab === 'overview' ? 'GENEL BAKIŞ' : tab === 'developers' ? 'GELİŞTİRİCİLER' : tab === 'posts' ? 'YAZILAR' : tab === 'updates' ? 'GÜNCELLEMELER' : tab === 'moderation' ? 'MODERASYON' : tab === 'maintenance' ? 'BAKIM' : 'KULLANICILAR'}</span><h1>{tab === 'overview' ? 'Çalışma alanına hoş geldin.' : tab === 'developers' ? 'İsimler, roller, bir ekip.' : tab === 'posts' ? 'Fikirlerini yazıya dök.' : tab === 'updates' ? 'Sitedeki yenilikleri duyur.' : tab === 'moderation' ? 'Yorumlar ve yasaklar.' : tab === 'maintenance' ? 'Siteyi tek tuşla bakıma al.' : 'Hesaplar ve yetkiler.'}</h1></div><span className="secure-tag"><ShieldCheck size={14} />Güvenli oturum</span></div>{error && <p className="message message-error" role="alert">{error}</p>}{tab === 'overview' && <><div className="workspace-welcome"><div><span className="small-label">MERHABA, {session.profile.username.toLocaleUpperCase('tr-TR')}</span><h2>{adminOnly ? (session.isAdmin ? 'Pano senin kontrolünde.' : 'Moderasyon paneline hoş geldin.') : 'Burası senin alanın.'}</h2><p>{adminOnly ? (session.isAdmin ? 'Geliştirici isimlerini ve rollerini düzenle, yeni hesaplar için tek kullanımlık aktivasyon kodu oluştur.' : 'Topluluğu düzenli tutmak için yorumları ve yasakları yönetebilirsin.') : 'Hesap bilgilerini kontrol et, şifreni güncelle ve geliştirici panosunu keşfet.'}</p>{adminOnly && session.isAdmin && <button className="button button-primary" type="button" onClick={() => setTab('members')}>Kullanıcı davet et <Plus size={17} /></button>}</div><Code2 className="welcome-code" size={115} strokeWidth={.8} aria-hidden="true" /></div>{adminOnly ? <>{session.isAdmin && <><div className="stat-grid"><StatCard label="Panodaki geliştiriciler" value={developers.length} icon={<Code2 size={20} />} /><StatCard label="Aktif hesaplar" value={members.filter(member => member.status === 'active').length} icon={<Users size={20} />} /><StatCard label="Aktivasyon bekleyenler" value={members.filter(member => member.status === 'pending').length} icon={<KeyRound size={20} />} /></div><div className="panel-section-title"><h2>Geliştirici panosu</h2><button type="button" className="text-action" onClick={() => setTab('developers')}>Panoyu düzenle <ArrowUpRight size={16} /></button></div><DeveloperCards developers={developers} /></>}</> : <><div className="profile-grid"><section className="panel-card"><span className="panel-card-icon"><Users size={21} /></span><h2>Hesap bilgilerim</h2><p className="card-description">Bu bilgiler yalnızca hesabında ve yönetim panelinde görünür.</p><dl className="profile-details"><div><dt>Kullanıcı adı</dt><dd>{session.profile.username}</dd></div><div><dt>E-posta</dt><dd>{session.profile.email}</dd></div><div><dt>Hesap durumu</dt><dd><span className="account-state active"><Check size={12} />Aktif</span></dd></div><div><dt>Hesap Rolü</dt><dd>{session.profile.role}</dd></div></dl></section><PasswordSettings /></div><div className="panel-section-title"><h2>Geliştirici panosu</h2><a className="text-action" href="/#pano">Sitede görüntüle <ArrowUpRight size={16} /></a></div><DeveloperCards developers={developers} /></>}</>}{tab === 'developers' && adminOnly && session.isAdmin && <DeveloperManager developers={developers} refresh={refresh} />}{tab === 'members' && adminOnly && session.isAdmin && <MemberManager members={members} refresh={refresh} session={session} />}{tab === 'posts' && adminOnly && session.isAdmin && <PostManager />}{tab === 'updates' && adminOnly && session.isAdmin && <UpdateManager />}{tab === 'moderation' && adminOnly && session.isMod && <ModerationManager members={members} />}{tab === 'maintenance' && adminOnly && session.isAdmin && <MaintenanceManager />}<footer className="workspace-footer">Semih Algan / Çalışma alanı<span>Özenle geliştirildi.</span></footer></main></div></div>
+  return (
+    <div className="workspace">
+      <a className="skip-link" href="#panel-content">İçeriğe geç</a>
+      <header className="workspace-header">
+        <a className="brand" href="/">
+          <span className="brand-icon"><Code2 size={22} /></span>
+          <span>semih<span className="brand-light">algan</span>.</span>
+        </a>
+        <div className="workspace-header-actions">
+          <a className="back-link" href="/#pano">Siteyi görüntüle <ArrowUpRight size={15} /></a>
+          <button className="logout-button" type="button" disabled={loggingOut} onClick={signOut}>
+            <LogOut size={16} />
+            <span>{loggingOut ? 'Çıkılıyor…' : 'Çıkış yap'}</span>
+          </button>
+        </div>
+      </header>
+      <div className="workspace-layout">
+        <aside className="workspace-sidebar">
+          <div className="workspace-label"><span className="status-dot" />{adminOnly ? 'YÖNETİM ALANI' : 'KİŞİSEL ALAN'}</div>
+          <nav aria-label="Panel menüsü">
+            <button
+              type="button"
+              className={tab === 'overview' ? 'sidebar-link selected' : 'sidebar-link'}
+              aria-current={tab === 'overview' ? 'page' : undefined}
+              onClick={() => setTab('overview')}
+            >
+              <LayoutDashboard size={18} />Genel bakış
+            </button>
+            {adminOnly ? (
+              <>
+                {session.isAdmin && (
+                  <button
+                    type="button"
+                    className={tab === 'developers' ? 'sidebar-link selected' : 'sidebar-link'}
+                    aria-current={tab === 'developers' ? 'page' : undefined}
+                    onClick={() => setTab('developers')}
+                  >
+                    <Code2 size={18} />Geliştiriciler<span>{developers.length}</span>
+                  </button>
+                )}
+                {session.isAdmin && (
+                  <button
+                    type="button"
+                    className={tab === 'members' ? 'sidebar-link selected' : 'sidebar-link'}
+                    aria-current={tab === 'members' ? 'page' : undefined}
+                    onClick={() => setTab('members')}
+                  >
+                    <KeyRound size={18} />Kullanıcılar<span>{members.length}</span>
+                  </button>
+                )}
+                {session.isAdmin && (
+                  <button
+                    type="button"
+                    className={tab === 'posts' ? 'sidebar-link selected' : 'sidebar-link'}
+                    aria-current={tab === 'posts' ? 'page' : undefined}
+                    onClick={() => setTab('posts')}
+                  >
+                    <FileText size={18} />Yazılar
+                  </button>
+                )}
+                {session.isAdmin && (
+                  <button
+                    type="button"
+                    className={tab === 'updates' ? 'sidebar-link selected' : 'sidebar-link'}
+                    aria-current={tab === 'updates' ? 'page' : undefined}
+                    onClick={() => setTab('updates')}
+                  >
+                    <Sparkles size={18} />Güncellemeler
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className={tab === 'moderation' ? 'sidebar-link selected' : 'sidebar-link'}
+                  aria-current={tab === 'moderation' ? 'page' : undefined}
+                  onClick={() => setTab('moderation')}
+                >
+                  <ShieldAlert size={18} />Moderasyon
+                </button>
+                {session.isAdmin && (
+                  <button
+                    type="button"
+                    className={tab === 'maintenance' ? 'sidebar-link selected' : 'sidebar-link'}
+                    aria-current={tab === 'maintenance' ? 'page' : undefined}
+                    onClick={() => setTab('maintenance')}
+                  >
+                    <Wrench size={18} />Bakım modu
+                  </button>
+                )}
+                <a className="sidebar-link" href="/panel"><Users size={18} />Kullanıcı panelim<ArrowUpRight size={14} /></a>
+              </>
+            ) : (
+              session.isMod && <a className="sidebar-link" href="/admin"><ShieldCheck size={18} />Yönetim paneli<ArrowUpRight size={14} /></a>
+            )}
+          </nav>
+          <div className="sidebar-note">
+            <LockKeyhole size={19} />
+            <p>{adminOnly ? 'Pano rolleri görünüm içindir. Yönetim yetkileri yalnızca sistem yöneticisi tarafından atanır.' : 'Şifren yalnızca sana ait. Bu alanda güvenle güncelleyebilirsin.'}</p>
+          </div>
+          <div className="sidebar-profile">
+            <span className="profile-monogram">{session.profile.username.slice(0, 2).toUpperCase()}</span>
+            <div><strong>{session.profile.username}</strong><span>{session.profile.role}</span></div>
+          </div>
+        </aside>
+        <main className="workspace-main" id="panel-content">
+          <div className="workspace-heading">
+            <div>
+              <span className="section-eyebrow">
+                {adminOnly ? 'YÖNETİM PANELİ' : 'KULLANICI PANELİ'} / {tab === 'overview' ? 'GENEL BAKIŞ' : tab === 'developers' ? 'GELİŞTİRİCİLER' : tab === 'posts' ? 'YAZILAR' : tab === 'updates' ? 'GÜNCELLEMELER' : tab === 'moderation' ? 'MODERASYON' : tab === 'maintenance' ? 'BAKIM' : 'KULLANICILAR'}
+              </span>
+              <h1>
+                {tab === 'overview' ? 'Çalışma alanına hoş geldin.' : tab === 'developers' ? 'İsimler, roller, bir ekip.' : tab === 'posts' ? 'Fikirlerini yazıya dök.' : tab === 'updates' ? 'Sitedeki yenilikleri duyur.' : tab === 'moderation' ? 'Yorumlar ve yasaklar.' : tab === 'maintenance' ? 'Siteyi tek tuşla bakıma al.' : 'Hesaplar ve yetkiler.'}
+              </h1>
+            </div>
+            <span className="secure-tag"><ShieldCheck size={14} />Güvenli oturum</span>
+          </div>
+
+          {error && <p className="message message-error" role="alert">{error}</p>}
+
+          {tab === 'overview' && (
+            <>
+              <div className="workspace-welcome">
+                <div>
+                  <span className="small-label">MERHABA, {session.profile.username.toLocaleUpperCase('tr-TR')}</span>
+                  <h2>{adminOnly ? (session.isAdmin ? 'Pano senin kontrolünde.' : 'Moderasyon paneline hoş geldin.') : 'Burası senin alanın.'}</h2>
+                  <p>{adminOnly ? (session.isAdmin ? 'Geliştirici isimlerini ve rollerini düzenle, yeni hesaplar için tek kullanımlık aktivasyon kodu oluştur.' : 'Topluluğu düzenli tutmak için yorumları ve yasakları yönetebilirsin.') : 'Hesap bilgilerini kontrol et, şifreni güncelle ve geliştirici panosunu keşfet.'}</p>
+                  {adminOnly && session.isAdmin && (
+                    <button className="button button-primary" type="button" onClick={() => setTab('members')}>
+                      Kullanıcı davet et <Plus size={17} />
+                    </button>
+                  )}
+                </div>
+                <Code2 className="welcome-code" size={115} strokeWidth={0.8} aria-hidden="true" />
+              </div>
+              {adminOnly ? (
+                session.isAdmin && (
+                  <>
+                    <div className="stat-grid">
+                      <StatCard label="Panodaki geliştiriciler" value={developers.length} icon={<Code2 size={20} />} />
+                      <StatCard label="Aktif hesaplar" value={members.filter(member => member.status === 'active').length} icon={<Users size={20} />} />
+                      <StatCard label="Aktivasyon bekleyenler" value={members.filter(member => member.status === 'pending').length} icon={<KeyRound size={20} />} />
+                    </div>
+                    <div className="panel-section-title">
+                      <h2>Geliştirici panosu</h2>
+                      <button type="button" className="text-action" onClick={() => setTab('developers')}>Panoyu düzenle <ArrowUpRight size={16} /></button>
+                    </div>
+                    <DeveloperCards developers={developers} />
+                  </>
+                )
+              ) : (
+                <>
+                  <div className="profile-grid">
+                    <section className="panel-card">
+                      <span className="panel-card-icon"><Users size={21} /></span>
+                      <h2>Hesap bilgilerim</h2>
+                      <p className="card-description">Bu bilgiler yalnızca hesabında ve yönetim panelinde görünür.</p>
+                      <dl className="profile-details">
+                        <div><dt>Kullanıcı adı</dt><dd>{session.profile.username}</dd></div>
+                        <div><dt>E-posta</dt><dd>{session.profile.email}</dd></div>
+                        <div><dt>Hesap durumu</dt><dd><span className="account-state active"><Check size={12} />Aktif</span></dd></div>
+                        <div><dt>Hesap Rolü</dt><dd>{session.profile.role}</dd></div>
+                      </dl>
+                    </section>
+                    <PasswordSettings />
+                  </div>
+                  <div className="panel-section-title">
+                    <h2>Geliştirici panosu</h2>
+                    <a className="text-action" href="/#pano">Sitede görüntüle <ArrowUpRight size={16} /></a>
+                  </div>
+                  <DeveloperCards developers={developers} />
+                </>
+              )}
+            </>
+          )}
+
+          {tab === 'developers' && adminOnly && session.isAdmin && <DeveloperManager developers={developers} refresh={refresh} />}
+          {tab === 'members' && adminOnly && session.isAdmin && <MemberManager members={members} refresh={refresh} session={session} />}
+          {tab === 'posts' && adminOnly && session.isAdmin && <PostManager />}
+          {tab === 'updates' && adminOnly && session.isAdmin && <UpdateManager />}
+          {tab === 'moderation' && adminOnly && session.isMod && <ModerationManager members={members} />}
+          {tab === 'maintenance' && adminOnly && session.isAdmin && <MaintenanceManager />}
+
+          <footer className="workspace-footer">
+            Semih Algan / Çalışma alanı
+            <span>Özenle geliştirildi.</span>
+          </footer>
+        </main>
+      </div>
+    </div>
+  )
 }
 
 function getPanelPath(adminOnly: boolean) {
@@ -79,7 +298,13 @@ function getPanelPath(adminOnly: boolean) {
 }
 
 function StatCard({ label, value, icon }: { label: string; value: number; icon: React.ReactNode }) {
-  return <article className="stat-card"><div><span>{label}</span>{icon}</div><strong>{String(value).padStart(2, '0')}</strong><span>Güncel kayıtlar</span></article>
+  return (
+    <article className="stat-card">
+      <div><span>{label}</span>{icon}</div>
+      <strong>{String(value).padStart(2, '0')}</strong>
+      <span>Güncel kayıtlar</span>
+    </article>
+  )
 }
 
 function PasswordSettings() {
@@ -103,11 +328,30 @@ function PasswordSettings() {
       setBusy(false); setPassword(''); setConfirmation('')
     }
   }
-  return <section className="panel-card"><span className="panel-card-icon"><LockKeyhole size={21} /></span><h2>Şifremi güncelle</h2><p className="card-description">En az 12 karakterlik güçlü bir şifre kullan.</p><form className="account-form compact-form" onSubmit={submit}><fieldset disabled={busy}><PasswordField id="panel-password" label="Yeni şifre" value={password} onChange={setPassword} /><PasswordField id="panel-password-confirm" label="Şifre tekrar" value={confirmation} onChange={setConfirmation} /><Feedback error={error} notice={notice} /><button className="button button-primary" type="submit">{busy ? 'Güncelleniyor…' : 'Şifreyi güncelle'}<ArrowUpRight size={16} /></button></fieldset></form></section>
+  return (
+    <section className="panel-card">
+      <span className="panel-card-icon"><LockKeyhole size={21} /></span>
+      <h2>Şifremi güncelle</h2>
+      <p className="card-description">En az 12 karakterlik güçlü bir şifre kullan.</p>
+      <form className="account-form compact-form" onSubmit={submit}>
+        <fieldset disabled={busy}>
+          <PasswordField id="panel-password" label="Yeni şifre" value={password} onChange={setPassword} />
+          <PasswordField id="panel-password-confirm" label="Şifre tekrar" value={confirmation} onChange={setConfirmation} />
+          <Feedback error={error} notice={notice} />
+          <button className="button button-primary" type="submit">{busy ? 'Güncelleniyor…' : 'Şifreyi güncelle'}<ArrowUpRight size={16} /></button>
+        </fieldset>
+      </form>
+    </section>
+  )
 }
 
 function Feedback({ error, notice }: { error: string; notice?: string }) {
-  return <div className="form-feedback" aria-live="polite">{error && <p className="message message-error" role="alert">{error}</p>}{notice && <p className="message message-success" role="status">{notice}</p>}</div>
+  return (
+    <div className="form-feedback" aria-live="polite">
+      {error && <p className="message message-error" role="alert">{error}</p>}
+      {notice && <p className="message message-success" role="status">{notice}</p>}
+    </div>
+  )
 }
 
 function DeveloperManager({ developers, refresh }: { developers: Developer[]; refresh: () => Promise<void> }) {
@@ -145,7 +389,77 @@ function DeveloperManager({ developers, refresh }: { developers: Developer[]; re
     finally { setBusy(false) }
   }
 
-  return <div className="management-grid"><section className="panel-card management-form"><span className="panel-card-icon"><Plus size={21} /></span><h2>{editing ? 'Geliştiriciyi düzenle' : 'Panoya bir isim ekle'}</h2><p className="card-description">İsim ve rol herkese açık panoda görünür. Bu seçim hesap yetkisi vermez.</p><form className="account-form" onSubmit={save}><fieldset disabled={busy}><div className="form-field"><label htmlFor="developer-name">Ad soyad / görünen isim</label><input id="developer-name" value={name} onChange={event => setName(event.target.value)} required minLength={2} maxLength={80} placeholder="Geliştiricinin ismi" /></div><div className="form-field"><label htmlFor="developer-role">Pano rolü</label><select id="developer-role" value={role} onChange={event => setRole(event.target.value as DeveloperRole)}>{developerRoles.map(item => <option key={item}>{item}</option>)}</select></div><Feedback error={error} notice={notice} /><button className="button button-primary form-submit" type="submit">{busy ? 'Kaydediliyor…' : editing ? 'Değişiklikleri kaydet' : 'Geliştirici ekle'}<Check size={17} /></button>{editing && <button className="text-action cancel-edit" type="button" onClick={reset}><X size={15} />Düzenlemeyi iptal et</button>}</fieldset></form></section><section className="panel-card roster-card"><div className="list-heading"><h2>Panodaki isimler</h2><span>{developers.length} geliştirici</span></div>{!developers.length ? <div className="list-empty"><Code2 size={30} /><p>Henüz bir isim eklenmedi.</p><span>İlk geliştiriciyi soldaki formdan ekle.</span></div> : <ul className="developer-list">{developers.map(developer => <li key={developer.id}><div><strong>{developer.name}</strong><RoleBadge role={developer.role} /></div><div className="row-actions">{deleting === developer.id ? <><span className="delete-prompt">Kaldırılsın mı?</span><button className="danger-button" type="button" disabled={busy} onClick={() => remove(developer.id)}>Kaldır</button><button className="icon-button" type="button" aria-label="Silmeyi iptal et" onClick={() => setDeleting(null)}><X size={16} /></button></> : <><button className="icon-button" type="button" aria-label={`${developer.name} düzenle`} disabled={busy} onClick={() => { setEditing(developer.id); setName(developer.name); setRole(developer.role); setError(''); setNotice('') }}><Pencil size={16} /></button><button className="icon-button" type="button" aria-label={`${developer.name} panodan kaldır`} disabled={busy} onClick={() => setDeleting(developer.id)}><Trash2 size={16} /></button></>}</div></li>)}</ul>}</section></div>
+  return (
+    <div className="management-grid">
+      <section className="panel-card management-form">
+        <span className="panel-card-icon"><Plus size={21} /></span>
+        <h2>{editing ? 'Geliştiriciyi düzenle' : 'Panoya bir isim ekle'}</h2>
+        <p className="card-description">İsim ve rol herkese açık panoda görünür. Bu seçim hesap yetkisi vermez.</p>
+        <form className="account-form" onSubmit={save}>
+          <fieldset disabled={busy}>
+            <div className="form-field">
+              <label htmlFor="developer-name">Ad soyad / görünen isim</label>
+              <input id="developer-name" value={name} onChange={event => setName(event.target.value)} required minLength={2} maxLength={80} placeholder="Geliştiricinin ismi" />
+            </div>
+            <div className="form-field">
+              <label htmlFor="developer-role">Pano rolü</label>
+              <select id="developer-role" value={role} onChange={event => setRole(event.target.value as DeveloperRole)}>
+                {developerRoles.map(item => <option key={item}>{item}</option>)}
+              </select>
+            </div>
+            <Feedback error={error} notice={notice} />
+            <button className="button button-primary form-submit" type="submit">
+              {busy ? 'Kaydediliyor…' : editing ? 'Değişiklikleri kaydet' : 'Geliştirici ekle'}
+              <Check size={17} />
+            </button>
+            {editing && (
+              <button className="text-action cancel-edit" type="button" onClick={reset}>
+                <X size={15} />Düzenlemeyi iptal et
+              </button>
+            )}
+          </fieldset>
+        </form>
+      </section>
+      <section className="panel-card roster-card">
+        <div className="list-heading">
+          <h2>Panodaki isimler</h2>
+          <span>{developers.length} geliştirici</span>
+        </div>
+        {!developers.length ? (
+          <div className="list-empty">
+            <Code2 size={30} />
+            <p>Henüz bir isim eklenmedi.</p>
+            <span>İlk geliştiriciyi soldaki formdan ekle.</span>
+          </div>
+        ) : (
+          <ul className="developer-list">
+            {developers.map(developer => (
+              <li key={developer.id}>
+                <div>
+                  <strong>{developer.name}</strong>
+                  <RoleBadge role={developer.role} />
+                </div>
+                <div className="row-actions">
+                  {deleting === developer.id ? (
+                    <>
+                      <span className="delete-prompt">Kaldırılsın mı?</span>
+                      <button className="danger-button" type="button" disabled={busy} onClick={() => remove(developer.id)}>Kaldır</button>
+                      <button className="icon-button" type="button" aria-label="Silmeyi iptal et" onClick={() => setDeleting(null)}><X size={16} /></button>
+                    </>
+                  ) : (
+                    <>
+                      <button className="icon-button" type="button" aria-label={`${developer.name} düzenle`} disabled={busy} onClick={() => { setEditing(developer.id); setName(developer.name); setRole(developer.role); setError(''); setNotice('') }}><Pencil size={16} /></button>
+                      <button className="icon-button" type="button" aria-label={`${developer.name} panodan kaldır`} disabled={busy} onClick={() => setDeleting(developer.id)}><Trash2 size={16} /></button>
+                    </>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </div>
+  )
 }
 
 type IssuedCode = { code: string; expiresAt: string; username?: string }
@@ -345,4 +659,252 @@ function MemberManager({ members, refresh, session }: { members: Member[]; refre
       </section>
     </>
   )
-        }
+}
+
+function UpdateManager() {
+  const [updates, setUpdates] = useState<SiteUpdate[]>([])
+  const [editing, setEditing] = useState<number | null>(null)
+  const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
+  const [deleting, setDeleting] = useState<number | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const [expandedId, setExpandedId] = useState<number | null>(null)
+
+  async function load() {
+    try {
+      setUpdates(await communityApi<SiteUpdate[]>('updates'))
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Güncellemeler yüklenemedi.')
+    }
+  }
+
+  useEffect(() => {
+    void load()
+  }, [])
+
+  function reset() {
+    setEditing(null)
+    setTitle('')
+    setDescription('')
+  }
+
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      await communityApi('save-update', {
+        id: editing ?? undefined,
+        title,
+        description: description.trim() || null,
+      })
+      setNotice(editing ? 'Güncelleme kaydı düzenlendi.' : 'Yeni güncelleme yayınlandı.')
+      reset()
+      await load()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Güncelleme kaydedilemedi.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function startEdit(item: SiteUpdate) {
+    setDeleting(null)
+    setEditing(item.id)
+    setTitle(item.title)
+    setDescription(item.description ?? '')
+    setError('')
+    setNotice('')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  async function remove(id: number) {
+    setBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      await communityApi('delete-update', { id })
+      if (editing === id) reset()
+      setDeleting(null)
+      setNotice('Güncelleme kaydı silindi.')
+      await load()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Silme işlemi yapılamadı.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="management-grid">
+      <section className="panel-card management-form">
+        <span className="panel-card-icon">
+          <Sparkles size={21} />
+        </span>
+        <h2>{editing ? `Güncelleme #${editing} Düzenle` : 'Yeni Güncelleme Ekle'}</h2>
+        <p className="card-description">
+          Sitede yapılan yenilikleri, düzeltmeleri veya duyuruları ziyaretçilerle paylaş.
+        </p>
+        <form className="account-form" onSubmit={save}>
+          <fieldset disabled={busy}>
+            <div className="form-field">
+              <label htmlFor="update-title">Güncelleme Konusu / Başlık *</label>
+              <input
+                id="update-title"
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                required
+                minLength={2}
+                maxLength={150}
+                placeholder="Örn: Yorum düzenleme özelliği & hata düzeltmeleri"
+              />
+            </div>
+            <div className="form-field">
+              <label htmlFor="update-desc">Detaylı Açıklama (İsteğe bağlı)</label>
+              <textarea
+                id="update-desc"
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                maxLength={5000}
+                rows={6}
+                placeholder="Güncellemenin detayları, eklenen yeni özellikler veya notlar…"
+                style={{ width: '100%', borderRadius: 12, padding: 12, font: 'inherit' }}
+              />
+              <span className="field-hint">
+                Ziyaretçiler güncelleme sayfasına girdiğinde bu açıklamayı tıklandığında açılır-kapanır şekilde görebilir.
+              </span>
+            </div>
+            <div className="form-feedback" aria-live="polite">
+              {error && <p className="message message-error" role="alert">{error}</p>}
+              {notice && <p className="message message-success" role="status">{notice}</p>}
+            </div>
+            <button className="button button-primary form-submit" type="submit">
+              {busy ? 'Kaydediliyor…' : editing ? 'Değişiklikleri kaydet' : 'Güncellemeyi Yayınla'}
+              <Check size={17} />
+            </button>
+            {editing && (
+              <button className="text-action cancel-edit" type="button" onClick={reset}>
+                <X size={15} />
+                Düzenlemeyi iptal et
+              </button>
+            )}
+          </fieldset>
+        </form>
+      </section>
+
+      <section className="panel-card roster-card">
+        <div className="list-heading">
+          <h2>Yayınlanan Güncellemeler</h2>
+          <span>{updates.length} güncelleme</span>
+        </div>
+        {!updates.length ? (
+          <div className="list-empty">
+            <Sparkles size={30} />
+            <p>Henüz bir güncelleme eklenmedi.</p>
+            <span>İlk yeniliği soldaki formdan yayınlayabilirsin.</span>
+          </div>
+        ) : (
+          <ul className="developer-list">
+            {updates.map(item => (
+              <li key={item.id} style={{ display: 'block', paddingBlock: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '3px 8px',
+                        borderRadius: 6,
+                        background: '#255b43',
+                        color: '#d5ee91',
+                        fontFamily: 'monospace',
+                        fontWeight: 700,
+                        fontSize: '0.8rem',
+                      }}
+                    >
+                      ID #{item.id}
+                    </span>
+                    <strong style={{ margin: 0, fontSize: '0.95rem' }}>{item.title}</strong>
+                  </div>
+                  <div className="row-actions">
+                    {deleting === item.id ? (
+                      <>
+                        <span className="delete-prompt">Silinsin mi?</span>
+                        <button className="danger-button" type="button" disabled={busy} onClick={() => remove(item.id)}>
+                          Sil
+                        </button>
+                        <button className="icon-button" type="button" aria-label="İptal" onClick={() => setDeleting(null)}>
+                          <X size={16} />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          className="icon-button"
+                          type="button"
+                          title="Düzenle"
+                          disabled={busy}
+                          onClick={() => startEdit(item)}
+                        >
+                          <Pencil size={15} />
+                        </button>
+                        <button
+                          className="icon-button"
+                          type="button"
+                          title="Sil"
+                          disabled={busy}
+                          onClick={() => setDeleting(item.id)}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
+                  <small style={{ opacity: 0.65 }}>Tarih: {formatDate(item.createdAt)}</small>
+                  {item.description && (
+                    <button
+                      type="button"
+                      className="text-action"
+                      style={{ fontSize: '0.78rem' }}
+                      onClick={() => setExpandedId(expandedId === item.id ? null : item.id)}
+                    >
+                      {expandedId === item.id ? (
+                        <>Detayı gizle <ChevronUp size={13} /></>
+                      ) : (
+                        <>Detayı gör <ChevronDown size={13} /></>
+                      )}
+                    </button>
+                  )}
+                </div>
+
+                {expandedId === item.id && item.description && (
+                  <div
+                    style={{
+                      marginTop: 10,
+                      padding: 12,
+                      background: '#f4f6ee',
+                      borderRadius: 8,
+                      fontSize: '0.88rem',
+                      lineHeight: 1.6,
+                      whiteSpace: 'pre-wrap',
+                      border: '1px solid #dbe4cd',
+                    }}
+                  >
+                    {item.description}
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </div>
+  )
+      }
