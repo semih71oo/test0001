@@ -158,6 +158,8 @@ function MemberManager({ members, refresh, session }: { members: Member[]; refre
   const [error, setError] = useState('')
   const [copyStatus, setCopyStatus] = useState('')
 
+  const isFounder = session?.profile.role === 'Kurucu'
+
   async function invite(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setBusy(true); setError(''); setCopyStatus(''); setIssued(null)
@@ -196,5 +198,150 @@ function MemberManager({ members, refresh, session }: { members: Member[]; refre
     catch { setCopyStatus('Kopyalama yapılamadı. Kodu seçerek kopyalayabilirsin.') }
   }
 
-  return <><div className="management-grid"><section className="panel-card management-form"><span className="panel-card-icon"><KeyRound size={21} /></span><h2>Bir hesap davet et</h2><p className="card-description">Kullanıcı adını ve e-postasını sen belirle. Şifresini kullanıcı kendi oluşturur.</p><form className="account-form" onSubmit={invite}><fieldset disabled={busy}><div className="form-field"><label htmlFor="invite-username">Kullanıcı adı</label><input id="invite-username" value={username} onChange={event => setUsername(event.target.value.toLowerCase())} autoComplete="off" autoCapitalize="none" spellCheck={false} required minLength={3} maxLength={32} pattern="[a-z0-9][a-z0-9._\-]*" placeholder="ör. geliştirici yerine gelistirici" /><span className="field-hint">3–32 karakter. Küçük Latin harfleri, rakam, nokta, tire ve alt çizgi.</span></div><div className="form-field"><label htmlFor="invite-email">E-posta adresi</label><input id="invite-email" type="email" value={email} onChange={event => setEmail(event.target.value)} required maxLength={254} autoComplete="off" placeholder="Kullanıcının e-posta adresi" /></div><Feedback error={error} /><button className="button button-primary form-submit" type="submit">{busy ? 'İşlem yapılıyor…' : 'Tek kullanımlık kod oluştur'}<Plus size={17} /></button></fieldset></form><div className="invitation-note"><ShieldCheck size={18} /><p>Kod 48 saat geçerlidir ve yalnızca bir kez kullanılabilir. Yeni kod oluşturmak eski kodu geçersiz kılar.</p></div></section><section className="panel-card issued-code-card" aria-live="polite">{issued ? <><span className="panel-card-icon"><CheckCheck size={23} /></span><span className="small-label">DAVET HAZIR</span><h2>{issued.username}</h2><p className="card-description">Bu kodu kullanıcıya güvenli bir kanaldan ilet. Kullanıcı giriş sayfasında “Kayıt ol” seçeneğiyle şifresini oluşturur.</p><div className="issued-code"><code>{issued.code}</code><button className="icon-button" type="button" aria-label="Aktivasyon kodunu kopyala" onClick={copyCode}>{copyStatus === 'Aktivasyon kodu kopyalandı.' ? <Check size={18} /> : <Copy size={18} />}</button></div><p className="field-hint">Son kullanım: {new Date(issued.expiresAt).toLocaleString('tr-TR')}</p><p className="message message-success">Kod yalnızca bu ekranda gösterilir. Daha sonra gerektiğinde yeni kod oluşturabilirsin.</p><p className="copy-feedback" role="status">{copyStatus}</p><button className="text-action" type="button" onClick={() => { setIssued(null); setCopyStatus('') }}><X size={15} />Kodu ekrandan kaldır</button></> : <div className="code-placeholder"><KeyRound size={43} strokeWidth={1} /><h2>Bir kod, yeni bir başlangıç.</h2><p>Oluşturduğun aktivasyon kodu burada görünür.<br />Şifreyi yalnızca kullanıcı belirler.</p><div className="code-placeholder-lines" aria-hidden="true"><span /><span /><span /><span /></div></div>}</section></div><section className="panel-card members-card"><div className="list-heading"><h2>Kullanıcı hesapları</h2><span>{members.length} hesap</span></div><p className="card-description">E-postalar herkese açık panoda gösterilmez. Aktif hesapların şifrelerine erişilemez.</p><div className="members-table-wrap"><table className="members-table"><caption className="sr-only">Kullanıcı adları, e-posta adresleri ve aktivasyon durumları</caption><thead><tr><th scope="col">Kullanıcı adı</th><th scope="col">E-posta</th><th scope="col">Rol</th><th scope="col">Durum</th><th scope="col">Aktivasyon</th></tr></thead><tbody>{members.map(member => <tr key={member.id}><td><strong>{member.username}</strong></td><td>{member.email}</td><td><select value={member.role} onChange={e => changeRole(member, e.target.value)} disabled={busy || (member.role === 'Kurucu' && session?.profile.role !== 'Kurucu')} style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid var(--line)', background: 'transparent', fontSize: '10px' }}>{accountRoles.map(r => <option key={r} value={r} disabled={r === 'Kurucu' && session?.profile.role !== 'Kurucu'}>{r}</option>)}</select></td><td><span className={`account-state ${member.status}`}>{member.status === 'active' ? <Check size={12} /> : <KeyRound size={12} />}{member.status === 'active' ? 'Aktif' : 'Kod bekliyor'}</span></td><td>{member.status === 'active' ? <span className="table-muted">Tamamlandı</span> : reissuing === member.id ? <div className="reissue-confirm"><span>Eski kod geçersiz olacak.</span><button type="button" className="text-action" disabled={busy} onClick={() => reissue(member)}>Yeni kod oluştur</button><button type="button" className="icon-button" aria-label="Kod yenilemeyi iptal et" disabled={busy} onClick={() => setReissuing(null)}><X size={15} /></button></div> : <button type="button" className="text-action" disabled={busy} onClick={() => setReissuing(member.id)}>Kodu yenile <KeyRound size={14} /></button>}</td></tr>)}</tbody></table></div></section></>
-}
+  return (
+    <>
+      <div className="management-grid">
+        <section className="panel-card management-form">
+          <span className="panel-card-icon"><KeyRound size={21} /></span>
+          <h2>Bir hesap davet et</h2>
+          <p className="card-description">Kullanıcı adını ve e-postasını sen belirle. Şifresini kullanıcı kendi oluşturur.</p>
+          <form className="account-form" onSubmit={invite}>
+            <fieldset disabled={busy}>
+              <div className="form-field">
+                <label htmlFor="invite-username">Kullanıcı adı</label>
+                <input id="invite-username" value={username} onChange={event => setUsername(event.target.value.toLowerCase())} autoComplete="off" autoCapitalize="none" spellCheck={false} required minLength={3} maxLength={32} pattern="[a-z0-9][a-z0-9._\-]*" placeholder="ör. geliştirici yerine gelistirici" />
+                <span className="field-hint">3–32 karakter. Küçük Latin harfleri, rakam, nokta, tire ve alt çizgi.</span>
+              </div>
+              <div className="form-field">
+                <label htmlFor="invite-email">E-posta adresi</label>
+                <input id="invite-email" type="email" value={email} onChange={event => setEmail(event.target.value)} required maxLength={254} autoComplete="off" placeholder="Kullanıcının e-posta adresi" />
+              </div>
+              <Feedback error={error} />
+              <button className="button button-primary form-submit" type="submit">
+                {busy ? 'İşlem yapılıyor…' : 'Tek kullanımlık kod oluştur'}
+                <Plus size={17} />
+              </button>
+            </fieldset>
+          </form>
+          <div className="invitation-note">
+            <ShieldCheck size={18} />
+            <p>Kod 48 saat geçerlidir ve yalnızca bir kez kullanılabilir. Yeni kod oluşturmak eski kodu geçersiz kılar.</p>
+          </div>
+        </section>
+
+        <section className="panel-card issued-code-card" aria-live="polite">
+          {issued ? (
+            <>
+              <span className="panel-card-icon"><CheckCheck size={23} /></span>
+              <span className="small-label">DAVET HAZIR</span>
+              <h2>{issued.username}</h2>
+              <p className="card-description">Bu kodu kullanıcıya ilet. Kullanıcı giriş sayfasında “Kayıt ol” seçeneğiyle şifresini oluşturur.</p>
+              <div className="issued-code">
+                <code>{issued.code}</code>
+                <button className="icon-button" type="button" aria-label="Aktivasyon kodunu kopyala" onClick={copyCode}>
+                  {copyStatus === 'Aktivasyon kodu kopyalandı.' ? <Check size={18} /> : <Copy size={18} />}
+                </button>
+              </div>
+              <p className="field-hint">Son kullanım: {new Date(issued.expiresAt).toLocaleString('tr-TR')}</p>
+              <p className="message message-success">Kod yalnızca bu ekranda gösterilir. Daha sonra gerektiğinde yeni kod oluşturabilirsin.</p>
+              <p className="copy-feedback" role="status">{copyStatus}</p>
+              <button className="text-action" type="button" onClick={() => { setIssued(null); setCopyStatus('') }}>
+                <X size={15} />Kodu ekrandan kaldır
+              </button>
+            </>
+          ) : (
+            <div className="code-placeholder">
+              <KeyRound size={43} strokeWidth={1} />
+              <h2>Bir kod, yeni bir başlangıç.</h2>
+              <p>Oluşturduğun aktivasyon kodu burada görünür.<br />Şifreyi yalnızca kullanıcı belirler.</p>
+              <div className="code-placeholder-lines" aria-hidden="true"><span /><span /><span /><span /></div>
+            </div>
+          )}
+        </section>
+      </div>
+
+      <section className="panel-card members-card">
+        <div className="list-heading">
+          <h2>Kullanıcı hesapları</h2>
+          <span>{members.length} hesap</span>
+        </div>
+        <p className="card-description">E-postalar herkese açık panoda gösterilmez. Aktif hesapların şifrelerine erişilemez.</p>
+        <div className="members-table-wrap">
+          <table className="members-table">
+            <caption className="sr-only">Kullanıcı adları, e-posta adresleri ve aktivasyon durumları</caption>
+            <thead>
+              <tr>
+                <th scope="col">Kullanıcı adı</th>
+                <th scope="col">E-posta</th>
+                <th scope="col">Rol</th>
+                <th scope="col">Durum</th>
+                <th scope="col">Aktivasyon</th>
+              </tr>
+            </thead>
+            <tbody>
+              {members.map(member => {
+                const isSelf = member.id === session?.profile.id
+                const isTargetAdminOrFounder = member.role === 'Admin' || member.role === 'Kurucu'
+                const cannotChange = busy || isSelf || (!isFounder && isTargetAdminOrFounder)
+
+                return (
+                  <tr key={member.id}>
+                    <td><strong>{member.username}</strong></td>
+                    <td>{member.email}</td>
+                    <td>
+                      <select
+                        value={member.role}
+                        onChange={e => changeRole(member, e.target.value)}
+                        disabled={cannotChange}
+                        title={isSelf ? 'Kendi rolünüzü değiştiremezsiniz' : cannotChange ? 'Bu rolü değiştirme yetkiniz yok' : undefined}
+                        style={{
+                          padding: '5px 8px',
+                          borderRadius: 6,
+                          border: '1px solid var(--line)',
+                          background: cannotChange ? '#f0f3e8' : '#fafbf6',
+                          fontSize: '11px',
+                          fontWeight: 500,
+                          cursor: cannotChange ? 'not-allowed' : 'pointer',
+                          color: 'var(--ink)',
+                        }}
+                      >
+                        {accountRoles.map(r => (
+                          <option
+                            key={r}
+                            value={r}
+                            disabled={!isFounder && (r === 'Kurucu' || r === 'Admin')}
+                          >
+                            {r}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <span className={`account-state ${member.status}`}>
+                        {member.status === 'active' ? <Check size={12} /> : <KeyRound size={12} />}
+                        {member.status === 'active' ? 'Aktif' : 'Kod bekliyor'}
+                      </span>
+                    </td>
+                    <td>
+                      {member.status === 'active' ? (
+                        <span className="table-muted">Tamamlandı</span>
+                      ) : reissuing === member.id ? (
+                        <div className="reissue-confirm">
+                          <span>Eski kod geçersiz olacak.</span>
+                          <button type="button" className="text-action" disabled={busy} onClick={() => reissue(member)}>Yeni kod oluştur</button>
+                          <button type="button" className="icon-button" aria-label="Kod yenilemeyi iptal et" disabled={busy} onClick={() => setReissuing(null)}><X size={15} /></button>
+                        </div>
+                      ) : (
+                        <button type="button" className="text-action" disabled={busy} onClick={() => setReissuing(member.id)}>Kodu yenile <KeyRound size={14} /></button>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </>
+  )
+          }
