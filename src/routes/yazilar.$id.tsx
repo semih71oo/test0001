@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Heart, Send } from 'lucide-react'
+import { Check, Heart, Pencil, Send, Trash2, X } from 'lucide-react'
 import { PublicShell } from '../components/PublicShell'
 import { ApiError, communityApi } from '../lib/community'
 import { formatDate, imageUrl } from '../lib/posts'
@@ -34,6 +34,12 @@ function PostPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
+  // Yorum düzenleme ve silme durumları
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingText, setEditingText] = useState('')
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [actionBusy, setActionBusy] = useState(false)
+
   async function load() {
     try {
       setPost(await communityApi<PostDetail>(`post?id=${encodeURIComponent(id)}`))
@@ -55,18 +61,66 @@ function PostPage() {
     try {
       const result = await communityApi<{ liked: boolean; likes: number }>('like', { postId: post.id })
       setPost({ ...post, liked: result.liked, likes: result.likes })
-    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Beğeni kaydedilemedi.') }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Beğeni kaydedilemedi.')
+    }
   }
 
   async function sendComment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setBusy(true); setError('')
+    setBusy(true)
+    setError('')
     try {
       await communityApi('comment', { postId: id, body: comment })
       setComment('')
       await load()
-    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Yorum gönderilemedi.') }
-    finally { setBusy(false) }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Yorum gönderilemedi.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function startEdit(commentId: string, currentBody: string) {
+    setDeletingId(null)
+    setEditingId(commentId)
+    setEditingText(currentBody)
+    setError('')
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+    setEditingText('')
+  }
+
+  async function submitEdit(commentId: string) {
+    if (!editingText.trim()) return
+    setActionBusy(true)
+    setError('')
+    try {
+      await communityApi('edit-comment', { id: commentId, body: editingText })
+      setEditingId(null)
+      setEditingText('')
+      await load()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Yorum güncellenemedi.')
+    } finally {
+      setActionBusy(false)
+    }
+  }
+
+  async function deleteComment(commentId: string) {
+    setActionBusy(true)
+    setError('')
+    try {
+      await communityApi('delete-comment', { id: commentId })
+      setDeletingId(null)
+      await load()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Yorum silinemedi.')
+    } finally {
+      setActionBusy(false)
+    }
   }
 
   if (status === 'loading') return <PublicShell><p role="status">Yükleniyor…</p></PublicShell>
@@ -105,17 +159,130 @@ function PostPage() {
 
       {!post.comments.length ? <p style={{ opacity: .7 }}>İlk yorumu sen yaz.</p> : (
         <ul style={{ listStyle: 'none', padding: 0, display: 'grid', gap: 14 }}>
-          {post.comments.map(item => (
-            <li key={item.id} className="panel-card" style={{ padding: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: '.9rem' }}>
-                <strong>
-                  {item.username} <AccountRoleBadge role={item.role} />
-                </strong>
-                <span style={{ opacity: .6 }}>{formatDate(item.createdAt)}</span>
-              </div>
-              <p style={{ margin: '8px 0 0', whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>{item.body}</p>
-            </li>
-          ))}
+          {post.comments.map(item => {
+            const isOwner = post.viewer && post.viewer.id === item.memberId
+            const canEdit = isOwner || post.viewer?.isAdmin
+            const canDelete = isOwner || post.viewer?.isMod || post.viewer?.isAdmin
+
+            return (
+              <li key={item.id} className="panel-card" style={{ padding: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: '.9rem' }}>
+                  <strong>
+                    {item.username} <AccountRoleBadge role={item.role} />
+                  </strong>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ opacity: .6 }}>{formatDate(item.createdAt)}</span>
+                    {item.editedAt && (
+                      <span
+                        title={`Son düzenleme: ${formatDate(item.editedAt)}`}
+                        style={{
+                          fontSize: '0.78rem',
+                          color: '#557847',
+                          background: '#edf4e4',
+                          border: '1px solid #d0ddc0',
+                          padding: '2px 6px',
+                          borderRadius: 4,
+                          fontStyle: 'italic',
+                        }}
+                      >
+                        (düzenlendi)
+                      </span>
+                    )}
+
+                    {/* Düzenleme & Silme butonları */}
+                    {editingId !== item.id && (
+                      <div className="row-actions" style={{ marginLeft: 6 }}>
+                        {canEdit && (
+                          <button
+                            type="button"
+                            className="icon-button"
+                            title="Yorumu düzenle"
+                            aria-label="Yorumu düzenle"
+                            disabled={actionBusy}
+                            onClick={() => startEdit(item.id, item.body)}
+                          >
+                            <Pencil size={14} />
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            type="button"
+                            className="icon-button"
+                            title="Yorumu sil"
+                            aria-label="Yorumu sil"
+                            disabled={actionBusy}
+                            onClick={() => setDeletingId(item.id)}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Silme Onay Kutusu */}
+                {deletingId === item.id && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, padding: 8, background: '#fff2eb', border: '1px solid #eccfc0', borderRadius: 8 }}>
+                    <span style={{ fontSize: '0.82rem', color: '#974d34' }}>Bu yorumu silmek istediğine emin misin?</span>
+                    <button
+                      type="button"
+                      className="danger-button"
+                      disabled={actionBusy}
+                      onClick={() => deleteComment(item.id)}
+                    >
+                      {actionBusy ? 'Siliniyor…' : 'Evet, sil'}
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-button"
+                      title="Vazgeç"
+                      aria-label="Vazgeç"
+                      disabled={actionBusy}
+                      onClick={() => setDeletingId(null)}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                )}
+
+                {/* Yorum Metni veya Düzenleme Formu */}
+                {editingId === item.id ? (
+                  <div style={{ marginTop: 10, display: 'grid', gap: 8 }}>
+                    <textarea
+                      value={editingText}
+                      onChange={e => setEditingText(e.target.value)}
+                      maxLength={1000}
+                      rows={3}
+                      style={{ width: '100%', borderRadius: 8, padding: 10, font: 'inherit', border: '1px solid #dce2d3' }}
+                    />
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        type="button"
+                        className="button button-primary"
+                        style={{ padding: '8px 14px', fontSize: '0.85rem' }}
+                        disabled={actionBusy || !editingText.trim()}
+                        onClick={() => submitEdit(item.id)}
+                      >
+                        {actionBusy ? 'Kaydediliyor…' : 'Kaydet'} <Check size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        className="button button-outline"
+                        style={{ padding: '8px 14px', fontSize: '0.85rem' }}
+                        disabled={actionBusy}
+                        onClick={cancelEdit}
+                      >
+                        Vazgeç <X size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p style={{ margin: '8px 0 0', whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>{item.body}</p>
+                )}
+              </li>
+            )
+          })}
         </ul>
       )}
     </PublicShell>
