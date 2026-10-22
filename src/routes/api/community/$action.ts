@@ -30,6 +30,20 @@ async function runMigrations() {
   try {
     await DB().prepare("UPDATE members SET role = 'Kurucu' WHERE is_admin = 1 OR LOWER(role) = 'founder' OR LOWER(role) = 'kurucu'").run()
   } catch {}
+  try {
+    await DB().prepare('ALTER TABLE comments ADD COLUMN edited_at INTEGER DEFAULT NULL').run()
+  } catch {}
+  try {
+    await DB().prepare(`
+      CREATE TABLE IF NOT EXISTS site_updates (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        description TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )
+    `).run()
+  } catch {}
   dbMigrated = true
 }
 
@@ -469,13 +483,27 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       const voter = await voterKey(request, s)
       const likes = await first<{ n: number }>('SELECT COUNT(*) AS n FROM post_likes WHERE post_id = ?1', id)
       const liked = await first('SELECT 1 FROM post_likes WHERE post_id = ?1 AND voter = ?2', id, voter)
-      const comments = await all<any>('SELECT c.id, c.body, c.created_at, m.username, m.role, m.is_admin FROM comments c JOIN members m ON m.id = c.member_id WHERE c.post_id = ?1 ORDER BY c.created_at ASC LIMIT 500', id)
+      const comments = await all<any>('SELECT c.id, c.body, c.created_at, c.edited_at, c.member_id, m.username, m.role, m.is_admin FROM comments c JOIN members m ON m.id = c.member_id WHERE c.post_id = ?1 ORDER BY c.created_at ASC LIMIT 500', id)
       const ban = s ? await activeCommentBan(s.id) : null
       return json({
         id: p.id, title: p.title, body: p.body, createdAt: p.created_at, updatedAt: p.updated_at, hasImage: !!p.has_image,
         likes: likes?.n ?? 0, liked: !!liked,
-        comments: comments.map(c => ({ id: c.id, body: c.body, createdAt: c.created_at, username: c.username, role: getRoleInfo(c.role, c.is_admin).role })),
-        viewer: s ? { username: s.username, isAdmin: getRoleInfo(s.role, s.is_admin).level >= 4, commentBan: ban ? { until: ban.expires_at } : null } : null,
+        comments: comments.map(c => ({
+          id: c.id,
+          body: c.body,
+          createdAt: c.created_at,
+          editedAt: c.edited_at ?? null,
+          memberId: c.member_id,
+          username: c.username,
+          role: getRoleInfo(c.role, c.is_admin).role,
+        })),
+        viewer: s ? {
+          id: s.id,
+          username: s.username,
+          isAdmin: getRoleInfo(s.role, s.is_admin).level >= 4,
+          isMod: getRoleInfo(s.role, s.is_admin).level >= 2,
+          commentBan: ban ? { until: ban.expires_at } : null,
+        } : null,
       })
     },
   },
@@ -519,6 +547,28 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       const postId = String(body.postId ?? '')
       if (!(await first('SELECT 1 FROM posts WHERE id = ?1', postId))) throw new HttpError('Yazı bulunamadı.', 404)
       await run('INSERT INTO comments (id, post_id, member_id, body, ip_hash, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)', crypto.randomUUID(), postId, s.id, text, await ipHashOf(request), Date.now())
+      return json({ ok: true })
+    },
+  },
+
+  'edit-comment': {
+    method: 'POST',
+    run: async (request, body) => {
+      const s = await requireSession(request)
+      const ban = await activeCommentBan(s.id)
+      if (ban) throw new HttpError(ban.expires_at ? `Yorum yapman ${fmtDate(ban.expires_at)} tarihine kadar kısıtlandı.` : 'Yorum yapman kalıcı olarak kısıtlandı.', 403)
+      const commentId = String(body.id ?? '')
+      const text = String(body.body ?? '').trim()
+      if (text.length < 1 || text.length > 1000) throw new HttpError('Yorum 1–1000 karakter olmalı.')
+      const existing = await first<{ id: string; member_id: string }>('SELECT id, member_id FROM comments WHERE id = ?1', commentId)
+      if (!existing) throw new HttpError('Yorum bulunamadı.', 404)
+
+      const callerLevel = getRoleInfo(s.role, s.is_admin).level
+      if (existing.member_id !== s.id && callerLevel < 4) {
+        throw new HttpError('Yalnızca kendi yorumunuzu düzenleyebilirsiniz.', 403)
+      }
+
+      await run('UPDATE comments SET body = ?1, edited_at = ?2 WHERE id = ?3', text, Date.now(), commentId)
       return json({ ok: true })
     },
   },
@@ -572,21 +622,42 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
     run: async request => {
       await requireRole(request, 2)
       const rows = await all<any>(
-        `SELECT c.id, c.body, c.created_at, c.ip_hash, m.id AS member_id, m.username, m.role, m.is_admin, p.title AS post_title,
+        `SELECT c.id, c.body, c.created_at, c.edited_at, c.ip_hash, m.id AS member_id, m.username, m.role, m.is_admin, p.title AS post_title,
                 EXISTS(SELECT 1 FROM bans b WHERE b.kind = 'comment' AND b.member_id = m.id AND (b.expires_at IS NULL OR b.expires_at > ?1)) AS comment_banned
            FROM comments c JOIN members m ON m.id = c.member_id JOIN posts p ON p.id = c.post_id
           ORDER BY c.created_at DESC LIMIT 100`,
         Date.now(),
       )
-      return json(rows.map(r => ({ id: r.id, body: r.body, createdAt: r.created_at, username: r.username, role: getRoleInfo(r.role, r.is_admin).role, memberId: r.member_id, postTitle: r.post_title, ipTag: String(r.ip_hash).slice(0, 8), commentBanned: !!r.comment_banned })))
+      return json(rows.map(r => ({
+        id: r.id,
+        body: r.body,
+        createdAt: r.created_at,
+        editedAt: r.edited_at ?? null,
+        username: r.username,
+        role: getRoleInfo(r.role, r.is_admin).role,
+        memberId: r.member_id,
+        postTitle: r.post_title,
+        ipTag: String(r.ip_hash).slice(0, 8),
+        commentBanned: !!r.comment_banned,
+      })))
     },
   },
 
   'delete-comment': {
     method: 'POST',
     run: async (request, body) => {
-      await requireRole(request, 2)
-      await run('DELETE FROM comments WHERE id = ?1', String(body.id ?? ''))
+      const s = await requireSession(request)
+      const commentId = String(body.id ?? '')
+      const existing = await first<{ member_id: string }>('SELECT member_id FROM comments WHERE id = ?1', commentId)
+      if (!existing) throw new HttpError('Yorum bulunamadı.', 404)
+
+      const callerLevel = getRoleInfo(s.role, s.is_admin).level
+      // Kullanıcı kendi yorumunu silebilir veya Moderatör (seviye 2+) silebilir
+      if (existing.member_id !== s.id && callerLevel < 2) {
+        throw new HttpError('Bu yorumu silme yetkiniz yok.', 403)
+      }
+
+      await run('DELETE FROM comments WHERE id = ?1', commentId)
       return json({ ok: true })
     },
   },
@@ -645,6 +716,53 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
     run: async (request, body) => {
       await requireRole(request, 2)
       await run('DELETE FROM bans WHERE id = ?1', String(body.id ?? ''))
+      return json({ ok: true })
+    },
+  },
+
+  updates: {
+    method: 'GET',
+    run: async () => {
+      const rows = await all<any>('SELECT id, title, description, created_at, updated_at FROM site_updates ORDER BY id DESC')
+      return json(rows.map(r => ({
+        id: r.id,
+        title: r.title,
+        description: r.description ?? null,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at,
+      })))
+    },
+  },
+
+  'save-update': {
+    method: 'POST',
+    run: async (request, body) => {
+      await requireRole(request, 4)
+      const title = String(body.title ?? '').trim()
+      const description = typeof body.description === 'string' ? body.description.trim() : null
+      if (title.length < 2 || title.length > 150) throw new HttpError('Güncelleme başlığı 2–150 karakter olmalı.')
+      if (description && description.length > 5000) throw new HttpError('Açıklama 5000 karakterden uzun olamaz.')
+      const now = Date.now()
+      const id = body.id ? Number(body.id) : null
+
+      if (id) {
+        const updated = await run('UPDATE site_updates SET title = ?1, description = ?2, updated_at = ?3 WHERE id = ?4', title, description, now, id)
+        if (updated.meta.changes !== 1) throw new HttpError('Güncelleme bulunamadı.', 404)
+        return json({ ok: true, id })
+      } else {
+        const inserted = await run('INSERT INTO site_updates (title, description, created_at, updated_at) VALUES (?1, ?2, ?3, ?3)', title, description, now)
+        return json({ ok: true, id: inserted.meta.last_row_id })
+      }
+    },
+  },
+
+  'delete-update': {
+    method: 'POST',
+    run: async (request, body) => {
+      await requireRole(request, 4)
+      const id = Number(body.id)
+      if (!id) throw new HttpError('Geçersiz güncelleme kimliği.')
+      await run('DELETE FROM site_updates WHERE id = ?1', id)
       return json({ ok: true })
     },
   },
