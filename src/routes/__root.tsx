@@ -1,5 +1,6 @@
 import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router'
 import { MaintenanceGate } from '../components/MaintenanceGate'
+import { CookieBanner } from '../components/CookieBanner'
 import { NotFoundPage } from '../components/NotFoundPage'
 
 import '../styles.css'
@@ -111,6 +112,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         <MaintenanceGate />
+        <CookieBanner />
         {children}
         <Scripts />
       </body>
