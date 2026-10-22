@@ -7,6 +7,20 @@ import type { BanRow, ModComment } from '../lib/posts'
 
 type BanDraft = { commentId: string; kind: 'comment' | 'ip'; duration: string; reason: string }
 
+function AccountRoleBadge({ role }: { role: string }) {
+  if (!role || role === 'Üye') return null
+  let cls = ''
+  switch (role) {
+    case 'Kurucu': cls = 'acc-role-kurucu'; break
+    case 'Admin': cls = 'acc-role-admin'; break
+    case 'Baş Moderatör': cls = 'acc-role-bas-moderator'; break
+    case 'Moderatör': cls = 'acc-role-moderator'; break
+    case 'Özel Üye': cls = 'acc-role-ozel-uye'; break
+  }
+  if (!cls) return null
+  return <span className={`acc-role ${cls}`}>{role}</span>
+}
+
 export function ModerationManager({ members }: { members: Member[] }) {
   const [comments, setComments] = useState<ModComment[]>([])
   const [bans, setBans] = useState<BanRow[]>([])
@@ -61,7 +75,15 @@ export function ModerationManager({ members }: { members: Member[] }) {
     <section className="panel-card members-card">
       <div className="list-heading"><h2>Hesaba yorum yasağı</h2></div>
       <div className="account-form" style={{ display: 'grid', gap: 10 }}>
-        <div className="form-field"><label htmlFor="ban-member">Hesap</label><select id="ban-member" value={memberId} onChange={event => setMemberId(event.target.value)}><option value="">Hesap seç…</option>{members.filter(m => m.status === 'active').map(m => <option key={m.id} value={m.id}>{m.username}</option>)}</select></div>
+        <div className="form-field">
+          <label htmlFor="ban-member">Hesap</label>
+          <select id="ban-member" value={memberId} onChange={event => setMemberId(event.target.value)}>
+            <option value="">Hesap seç…</option>
+            {members.filter(m => m.status === 'active').map(m => (
+              <option key={m.id} value={m.id}>{m.username} ({m.role})</option>
+            ))}
+          </select>
+        </div>
         <div className="form-field"><label htmlFor="ban-member-duration">Süre</label><select id="ban-member-duration" value={memberDuration} onChange={event => setMemberDuration(event.target.value)}>{banDurations.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}</select></div>
         <div className="form-field"><label htmlFor="ban-member-reason">Sebep (isteğe bağlı)</label><input id="ban-member-reason" value={memberReason} onChange={event => setMemberReason(event.target.value)} maxLength={200} /></div>
         <button className="button button-primary" type="button" disabled={busy || !memberId} onClick={banMember}>Yorum yasağı uygula<Ban size={16} /></button>
@@ -72,7 +94,10 @@ export function ModerationManager({ members }: { members: Member[] }) {
       <div className="list-heading"><h2>Son yorumlar</h2><span>{comments.length} yorum</span></div>
       {!comments.length ? <div className="list-empty"><MessageCircle size={30} /><p>Henüz yorum yok.</p></div> : <ul className="developer-list">{comments.map(item => <li key={item.id} style={{ display: 'block' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-          <strong>{item.username}{item.commentBanned && <small style={{ marginLeft: 8, opacity: .7 }}>(yorum yasaklı)</small>}</strong>
+          <strong>
+            {item.username} <AccountRoleBadge role={item.role} />
+            {item.commentBanned && <small style={{ marginLeft: 8, opacity: .7 }}>(yorum yasaklı)</small>}
+          </strong>
           <small style={{ opacity: .65 }}>{formatDate(item.createdAt)} · {item.postTitle} · {item.ipTag}</small>
         </div>
         <p style={{ margin: '6px 0 10px', whiteSpace: 'pre-wrap' }}>{item.body}</p>
