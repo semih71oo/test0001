@@ -1,10 +1,42 @@
 export type PostSummary = { id: string; title: string; excerpt: string; createdAt: number; updatedAt: number; hasImage: boolean; likes: number; comments: number }
-export type PostComment = { id: string; body: string; createdAt: number; username: string; role: string }
-export type PostDetail = {
-  id: string; title: string; body: string; createdAt: number; updatedAt: number; hasImage: boolean
-  likes: number; liked: boolean; comments: PostComment[]
-  viewer: { username: string; isAdmin: boolean; commentBan: { until: number | null } | null } | null
+
+export type PostComment = {
+  id: string
+  body: string
+  createdAt: number
+  editedAt?: number | null
+  username: string
+  role: string
+  memberId: string
 }
+
+export type PostDetail = {
+  id: string
+  title: string
+  body: string
+  createdAt: number
+  updatedAt: number
+  hasImage: boolean
+  likes: number
+  liked: boolean
+  comments: PostComment[]
+  viewer: {
+    id: string
+    username: string
+    isAdmin: boolean
+    isMod: boolean
+    commentBan: { until: number | null } | null
+  } | null
+}
+
+export type SiteUpdate = {
+  id: number
+  title: string
+  description?: string | null
+  createdAt: number
+  updatedAt: number
+}
+
 export type ModComment = { id: string; body: string; createdAt: number; username: string; role: string; memberId: string; postTitle: string; ipTag: string; commentBanned: boolean }
 export type BanRow = { id: string; kind: 'ip' | 'comment'; username: string | null; ipTag: string | null; expiresAt: number | null; reason: string | null; createdAt: number }
 
