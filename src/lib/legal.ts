@@ -167,11 +167,11 @@ const gizlilik: LegalDoc = {
     {
       title: '4. Çerezler',
       blocks: [
-        'Çerez, ziyaret ettiğiniz sitenin tarayıcınıza kaydettiği küçük bir metin dosyasıdır. Sitemiz yalnızca hizmetin çalışması için zorunlu olan bir çerez kullanır:',
+        'Çerez, ziyaret ettiğiniz sitenin tarayıcınıza kaydettiği küçük bir metin dosyasıdır. Sitemiz şu çerezleri kullanır:',
         { list: [
-          'sa_session: giriş yaptığınızda oluşturulur, oturumunuzu tanımak için kullanılır. HttpOnly ve Secure olarak ayarlanır, yani betikler tarafından okunamaz ve yalnızca şifreli bağlantıda gönderilir. Geçerlilik süresi en fazla 7 gündür; çıkış yaptığınızda silinir.',
+          'Zorunlu Çerezler (sa_session): Giriş yaptığınızda oluşturulur, oturumunuzu tanımak için kullanılır. Analiz veya pazarlama amacıyla kullanılmaz. Çıkış yaptığınızda veya süresi dolduğunda (en fazla 7 gün) silinir.',
         ] },
-        'Bu çerez hizmetin sunulması için kesinlikle gereklidir ve giriş yapmadıkça oluşturulmaz. Analiz, reklam veya pazarlama çerezi kullanılmaz; bu nedenle çerez onay bandı gösterilmez. İsterseniz tarayıcı ayarlarınızdan çerezleri silebilir veya engelleyebilirsiniz; bu durumda giriş yapamazsınız.',
+        'Çerez tercihlerinizi sitemize ilk girişinizde karşınıza çıkan onay ekranından yönetebilirsiniz. Tarayıcı ayarlarınızdan çerezleri tamamen silebilir veya engelleyebilirsiniz; ancak bu durumda giriş yapamazsınız.',
       ],
     },
     {
