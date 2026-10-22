@@ -1,4 +1,3 @@
-// Konum: src/routes/api/community/$action.ts
 import { createFileRoute } from '@tanstack/react-router'
 import { env } from 'cloudflare:workers'
 
@@ -14,13 +13,27 @@ const COOKIE = 'sa_session'
 const SITE_URL = 'https://semihalgan.com.tr'
 const RESET_TTL_MS = 30 * 60 * 1000
 const RESET_FROM = 'Semih Algan <noreply@mail.semihalgan.com.tr>'
+
 let resetTableReady = false
 async function ensureResetTable() {
   if (resetTableReady) return
   await DB().prepare('CREATE TABLE IF NOT EXISTS reset_tokens (token_hash TEXT PRIMARY KEY, member_id TEXT NOT NULL, expires_at INTEGER NOT NULL)').run()
   resetTableReady = true
 }
-// 32 karakter (I, O, 0, 1 yok) => 256 % 32 = 0, rastgelelikte sapma yok
+
+// OTOMATİK VERİTABANI GÖÇÜ (AUTO-MIGRATION)
+let dbMigrated = false
+async function runMigrations() {
+  if (dbMigrated) return
+  try {
+    await DB().prepare("ALTER TABLE members ADD COLUMN role TEXT DEFAULT 'Üye'").run()
+    await DB().prepare("UPDATE members SET role = 'Kurucu' WHERE is_admin = 1").run()
+  } catch (e) {
+    // Sütun zaten varsa hata verir, yoksayarız.
+  }
+  dbMigrated = true
+}
+
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 
 class HttpError extends Error {
@@ -33,7 +46,6 @@ const json = (data: unknown, status = 200, headers: HeadersInit = {}) =>
     headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...headers },
   })
 
-/* ---------- kripto yardımcıları ---------- */
 const enc = new TextEncoder()
 const toHex = (buf: ArrayBuffer) => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('')
 const toB64 = (buf: ArrayBuffer | Uint8Array) => btoa(String.fromCharCode(...new Uint8Array(buf)))
@@ -42,7 +54,6 @@ const sha256 = async (text: string) => toHex(await crypto.subtle.digest('SHA-256
 
 async function derive(password: string, salt: Uint8Array) {
   const key = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits'])
-  // Workers PBKDF2 üst sınırı 100.000 iterasyon
   return crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations: 100000 }, key, 256)
 }
 async function hashPassword(password: string) {
@@ -50,7 +61,6 @@ async function hashPassword(password: string) {
   return `${toB64(salt)}:${toB64(await derive(password, salt))}`
 }
 async function verifyPassword(password: string, stored: string | null) {
-  // Kullanıcı yoksa da aynı süreyi harca (kullanıcı adı sızdırmamak için)
   const [s, h] = (stored ?? `${toB64(new Uint8Array(16))}:${toB64(new Uint8Array(32))}`).split(':')
   const a = new Uint8Array(await derive(password, fromB64(s)))
   const b = fromB64(h)
@@ -59,12 +69,10 @@ async function verifyPassword(password: string, stored: string | null) {
   return stored !== null && diff === 0
 }
 
-/* ---------- 16 haneli kod ---------- */
 const generateCode = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), b => ALPHABET[b % 32]).join('')
 const formatCode = (c: string) => c.match(/.{4}/g)!.join('-')
 const normalizeCode = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '')
 
-/* ---------- genel yardımcılar ---------- */
 const randomToken = () => toB64(crypto.getRandomValues(new Uint8Array(32))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 const first = <T>(sql: string, ...args: unknown[]) => DB().prepare(sql).bind(...args).first<T>()
 const all = async <T>(sql: string, ...args: unknown[]) => (await DB().prepare(sql).bind(...args).all<T>()).results
@@ -88,9 +96,11 @@ function readCookie(request: Request, name: string) {
   return match ? decodeURIComponent(match.slice(name.length + 1)) : null
 }
 
-type SessionRow = { id: string; username: string; email: string; status: 'pending' | 'active'; is_admin: number; created_at: string }
+type SessionRow = { id: string; username: string; email: string; status: 'pending' | 'active'; is_admin: number; role: string; created_at: string }
 
-// Bakım modu açıkken yalnızca yönetici oturumları geçerli sayılır.
+// ROL SEVİYELERİ (Hiyerarşi)
+const roleLevels: Record<string, number> = { 'Üye': 0, 'Özel Üye': 1, 'Moderatör': 2, 'Baş Moderatör': 3, 'Admin': 4, 'Kurucu': 5 }
+
 async function isMaintenanceOn() {
   const row = await first<{ value: string }>('SELECT value FROM settings WHERE key = \'maintenance_on\'')
   return row?.value === '1'
@@ -99,12 +109,13 @@ async function currentSession(request: Request) {
   const token = readCookie(request, COOKIE)
   if (!token) return null
   const row = await first<SessionRow>(
-    `SELECT m.id, m.username, m.email, m.status, m.is_admin, m.created_at
+    `SELECT m.id, m.username, m.email, m.status, m.is_admin, m.role, m.created_at
        FROM sessions s JOIN members m ON m.id = s.member_id
       WHERE s.token_hash = ?1 AND s.expires_at > ?2 AND m.status = 'active'`,
     await sha256(token), Date.now(),
   )
-  if (row && !row.is_admin && (await isMaintenanceOn())) return null
+  const level = roleLevels[row?.role ?? 'Üye'] ?? 0
+  if (row && level < 4 && (await isMaintenanceOn())) return null
   return row
 }
 async function requireSession(request: Request) {
@@ -112,14 +123,16 @@ async function requireSession(request: Request) {
   if (!s) throw new HttpError('Oturum bulunamadı. Lütfen giriş yap.', 401)
   return s
 }
-async function requireAdmin(request: Request) {
+// YETKİ KONTROLÜ
+async function requireRole(request: Request, minLevel: number) {
   const s = await requireSession(request)
-  if (!s.is_admin) throw new HttpError('Bu işlem için yönetici yetkisi gerekiyor.', 403)
+  const level = roleLevels[s.role ?? 'Üye'] ?? 0
+  if (level < minLevel) throw new HttpError('Bu işlem için yetkiniz yok.', 403)
   return s
 }
 
-const memberDto = (m: { id: string; username: string; email: string; status: string; created_at: string }) =>
-  ({ id: m.id, username: m.username, email: m.email, status: m.status, createdAt: m.created_at })
+const memberDto = (m: any) =>
+  ({ id: m.id, username: m.username, email: m.email, status: m.status, createdAt: m.created_at, role: m.role || 'Üye' })
 
 function validatePassword(p: unknown): string {
   if (typeof p !== 'string' || p.length < 12) throw new HttpError('Şifre en az 12 karakter olmalı.')
@@ -151,13 +164,11 @@ async function findValidCode(rawCode: unknown) {
   return { ...row, hash }
 }
 
-/* ---------- yazılar, yorumlar, yasaklar ---------- */
 const IMAGE_RE = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/]+=*)$/
 const MAX_IMAGE_CHARS = 900_000
 const fmtDate = (ms: number) => new Date(ms).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' })
 
 const clientIp = (request: Request) => request.headers.get('CF-Connecting-IP') ?? 'unknown'
-// Ham IP saklanmaz; yalnızca tuzlu özet tutulur.
 const ipHashOf = (request: Request) => sha256(`sa-ip-v1:${clientIp(request)}`)
 
 async function isIpBanned(ipHash: string) {
@@ -174,11 +185,9 @@ async function voterKey(request: Request, s: SessionRow | null) {
 }
 const queryParam = (request: Request, name: string) => new URL(request.url).searchParams.get(name) ?? ''
 
-/* ---------- eylemler ---------- */
 type Handler = (request: Request, body: any) => Promise<Response>
 
 const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
-  // Herkese açık pano
   developers: {
     method: 'GET',
     run: async () => json(await all('SELECT id, name, role FROM developers ORDER BY created_at ASC')),
@@ -188,47 +197,70 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
     method: 'GET',
     run: async request => {
       const s = await requireSession(request)
-      return json({ profile: memberDto(s), isAdmin: !!s.is_admin })
+      const level = roleLevels[s.role ?? 'Üye'] ?? 0
+      return json({ profile: memberDto(s), isAdmin: level >= 4, isMod: level >= 2 })
     },
   },
 
   members: {
     method: 'GET',
     run: async request => {
-      await requireAdmin(request)
-      const rows = await all<any>('SELECT id, username, email, status, created_at FROM members WHERE is_admin = 0 ORDER BY created_at DESC')
+      await requireRole(request, 4) // Sadece Admin ve Kurucu üyeleri görebilir/yönetebilir
+      const rows = await all<any>('SELECT id, username, email, status, role, created_at FROM members ORDER BY created_at DESC')
       return json(rows.map(memberDto))
     },
   },
 
-  // Admin: nick + e-posta gir -> 16 haneli kod üret
+  'set-role': {
+    method: 'POST',
+    run: async (request, body) => {
+      const s = await requireRole(request, 4) // Admin+
+      const targetId = String(body.id ?? '')
+      const newRole = String(body.role ?? '')
+      if (!Object.keys(roleLevels).includes(newRole)) throw new HttpError('Geçersiz rol.')
+      
+      const target = await first<{ role: string }>('SELECT role FROM members WHERE id = ?1', targetId)
+      if (!target) throw new HttpError('Kullanıcı bulunamadı.', 404)
+      
+      const callerLevel = roleLevels[s.role ?? 'Üye'] ?? 0
+      const targetLevel = roleLevels[target.role ?? 'Üye'] ?? 0
+      const newLevel = roleLevels[newRole] ?? 0
+      
+      if (callerLevel < 5) {
+        if (targetLevel === 5) throw new HttpError('Kurucu hesabı değiştirilemez.')
+        if (newLevel === 5) throw new HttpError('Kurucu rolü verilemez.')
+      }
+      
+      await run('UPDATE members SET role = ?1 WHERE id = ?2', newRole, targetId)
+      return json({ ok: true })
+    }
+  },
+
   invite: {
     method: 'POST',
     run: async (request, body) => {
-      await requireAdmin(request)
+      await requireRole(request, 4)
       const username = String(body.username ?? '').trim().toLowerCase()
       const email = String(body.email ?? '').trim().toLowerCase()
       if (!/^[a-z0-9][a-z0-9._-]{2,31}$/.test(username)) throw new HttpError('Kullanıcı adı 3–32 karakter olmalı (a-z, 0-9, nokta, tire, alt çizgi).')
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) throw new HttpError('Geçerli bir e-posta adresi gir.')
       if (await first('SELECT 1 FROM members WHERE username = ?1', username)) throw new HttpError('Bu kullanıcı adı zaten alınmış.', 409)
       const id = crypto.randomUUID()
-      await run('INSERT INTO members (id, username, email, status, is_admin, created_at) VALUES (?1, ?2, ?3, \'pending\', 0, ?4)', id, username, email, new Date().toISOString())
+      await run('INSERT INTO members (id, username, email, status, is_admin, role, created_at) VALUES (?1, ?2, ?3, \'pending\', 0, \'Üye\', ?4)', id, username, email, new Date().toISOString())
       return json({ ...(await issueCode(id)), username })
     },
   },
 
-  // Admin: süresi dolan / kaybolan kod için yenisi (eskisi geçersiz olur)
   reissue: {
     method: 'POST',
     run: async (request, body) => {
-      await requireAdmin(request)
-      const member = await first<{ id: string; username: string }>('SELECT id, username FROM members WHERE id = ?1 AND status = \'pending\' AND is_admin = 0', String(body.id ?? ''))
+      await requireRole(request, 4)
+      const member = await first<{ id: string; username: string }>('SELECT id, username FROM members WHERE id = ?1 AND status = \'pending\'', String(body.id ?? ''))
       if (!member) throw new HttpError('Bekleyen hesap bulunamadı.', 404)
       return json({ ...(await issueCode(member.id)), username: member.username })
     },
   },
 
-  // Kayıt ol 1. adım: kodu doğrula
   'check-code': {
     method: 'POST',
     run: async (request, body) => {
@@ -238,7 +270,6 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
     },
   },
 
-  // Kayıt ol 2. adım: şifre belirle, kod tek kullanımlık olarak yanar
   activate: {
     method: 'POST',
     run: async (request, body) => {
@@ -246,7 +277,6 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       const password = validatePassword(body.password)
       const { member_id, username, hash } = await findValidCode(body.code)
       const passwordHash = await hashPassword(password)
-      // Atomik tüketim: iki kişi aynı anda deneyse yalnızca biri geçer
       const consumed = await run('UPDATE activation_codes SET used_at = ?1 WHERE code_hash = ?2 AND used_at IS NULL AND expires_at > ?1', Date.now(), hash)
       if (consumed.meta.changes !== 1) throw new HttpError('Kod geçersiz veya süresi dolmuş.')
       await run('UPDATE members SET password_hash = ?1, status = \'active\' WHERE id = ?2', passwordHash, member_id)
@@ -262,10 +292,13 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       const password = String(body.password ?? '')
       const founder = !!body.founder
       const member = founder
-        ? await first<{ id: string; password_hash: string }>('SELECT id, password_hash FROM members WHERE email = ?1 AND is_admin = 1 AND status = \'active\'', identifier)
-        : await first<{ id: string; password_hash: string }>('SELECT id, password_hash FROM members WHERE username = ?1 AND is_admin = 0 AND status = \'active\'', identifier)
+        ? await first<{ id: string; password_hash: string; role: string }>('SELECT id, password_hash, role FROM members WHERE email = ?1 AND status = \'active\'', identifier)
+        : await first<{ id: string; password_hash: string; role: string }>('SELECT id, password_hash, role FROM members WHERE username = ?1 AND status = \'active\'', identifier)
       if (!(await verifyPassword(password, member?.password_hash ?? null)) || !member) throw new HttpError('Kullanıcı adı veya şifre hatalı.', 401)
-      if (!founder && (await isMaintenanceOn())) throw new HttpError('Site bakımda. Şu an yalnızca yönetici giriş yapabilir.', 503)
+      
+      const level = roleLevels[member.role ?? 'Üye'] ?? 0
+      if (level < 4 && (await isMaintenanceOn())) throw new HttpError('Site bakımda. Şu an yalnızca yönetici giriş yapabilir.', 503)
+      
       const token = randomToken()
       await run('INSERT INTO sessions (token_hash, member_id, expires_at) VALUES (?1, ?2, ?3)', await sha256(token), member.id, Date.now() + SESSION_TTL_MS)
       return json({ ok: true }, 200, {
@@ -289,15 +322,12 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       const s = await requireSession(request)
       const password = validatePassword(body.password)
       await run('UPDATE members SET password_hash = ?1 WHERE id = ?2', await hashPassword(password), s.id)
-      // Diğer oturumları kapat, mevcut olanı koru
       const token = readCookie(request, COOKIE)
       await run('DELETE FROM sessions WHERE member_id = ?1 AND token_hash != ?2', s.id, token ? await sha256(token) : '')
       return json({ ok: true })
     },
   },
 
-  // E-posta servisi olmadığı için şifre sıfırlama şimdilik yok; arayüzü bozmasın diye sabit cevap
-  // Şifremi unuttum: tek kullanımlık, 30 dk geçerli bağlantıyı Resend ile e-postaya gönderir
   recover: {
     method: 'POST',
     run: async (request, body) => {
@@ -306,10 +336,9 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       await ensureResetTable()
       const identifier = String(body.username ?? '').trim().toLowerCase()
       const founder = !!body.founder
-      // Giriş ekranıyla aynı mantık: kurucu e-posta ile, üyeler kullanıcı adı ile
       const member = founder
-        ? await first<{ id: string; email: string }>('SELECT id, email FROM members WHERE email = ?1 AND is_admin = 1 AND status = \'active\'', identifier)
-        : await first<{ id: string; email: string }>('SELECT id, email FROM members WHERE username = ?1 AND is_admin = 0 AND status = \'active\'', identifier)
+        ? await first<{ id: string; email: string }>('SELECT id, email FROM members WHERE email = ?1 AND status = \'active\'', identifier)
+        : await first<{ id: string; email: string }>('SELECT id, email FROM members WHERE username = ?1 AND status = \'active\'', identifier)
       if (member) {
         const token = randomToken()
         await run('DELETE FROM reset_tokens WHERE member_id = ?1', member.id)
@@ -317,7 +346,6 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
           'INSERT INTO reset_tokens (token_hash, member_id, expires_at) VALUES (?1, ?2, ?3)',
           await sha256(token), member.id, Date.now() + RESET_TTL_MS,
         )
-        // Bağlantı her zaman gerçek alan adına gider (istek başlığına güvenilmez)
         const link = `${SITE_URL}/giris?reset=${encodeURIComponent(token)}`
         try {
           const res = await fetch('https://api.resend.com/emails', {
@@ -335,12 +363,10 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
           console.error('Resend isteği başarısız:', err)
         }
       }
-      // Hesap var da olsa yok da olsa aynı cevap (hesap varlığı sızmasın)
       return json({ ok: true })
     },
   },
 
-  // E-postadaki bağlantıyla yeni şifre belirle
   'reset-password': {
     method: 'POST',
     run: async (request, body) => {
@@ -363,7 +389,7 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
   'save-developer': {
     method: 'POST',
     run: async (request, body) => {
-      await requireAdmin(request)
+      await requireRole(request, 4)
       const name = String(body.name ?? '').trim()
       if (name.length < 2 || name.length > 80) throw new HttpError('İsim 2–80 karakter olmalı.')
       if (!ROLES.includes(body.role)) throw new HttpError('Geçersiz rol.')
@@ -376,27 +402,27 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
   'delete-developer': {
     method: 'POST',
     run: async (request, body) => {
-      await requireAdmin(request)
+      await requireRole(request, 4)
       await run('DELETE FROM developers WHERE id = ?1', String(body.id ?? ''))
       return json({ ok: true })
     },
   },
 
-  /* ---------- bakım modu ---------- */
   maintenance: {
     method: 'GET',
     run: async request => {
       const rows = await all<{ key: string; value: string }>('SELECT key, value FROM settings WHERE key IN (\'maintenance_on\', \'maintenance_message\')')
       const map = Object.fromEntries(rows.map(r => [r.key, r.value]))
       const viewer = await currentSession(request)
-      return json({ on: map.maintenance_on === '1', message: map.maintenance_message ?? '', viewerIsAdmin: !!viewer?.is_admin })
+      const level = roleLevels[viewer?.role ?? 'Üye'] ?? 0
+      return json({ on: map.maintenance_on === '1', message: map.maintenance_message ?? '', viewerIsAdmin: level >= 4 })
     },
   },
 
   'set-maintenance': {
     method: 'POST',
     run: async (request, body) => {
-      await requireAdmin(request)
+      await requireRole(request, 4)
       const on = body.on === true
       const message = String(body.message ?? '').trim().slice(0, 200)
       await DB().batch([
@@ -407,7 +433,6 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
     },
   },
 
-  /* ---------- herkese açık: yazılar ---------- */
   posts: {
     method: 'GET',
     run: async () => {
@@ -432,13 +457,13 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       const voter = await voterKey(request, s)
       const likes = await first<{ n: number }>('SELECT COUNT(*) AS n FROM post_likes WHERE post_id = ?1', id)
       const liked = await first('SELECT 1 FROM post_likes WHERE post_id = ?1 AND voter = ?2', id, voter)
-      const comments = await all<any>('SELECT c.id, c.body, c.created_at, m.username FROM comments c JOIN members m ON m.id = c.member_id WHERE c.post_id = ?1 ORDER BY c.created_at ASC LIMIT 500', id)
+      const comments = await all<any>('SELECT c.id, c.body, c.created_at, m.username, m.role FROM comments c JOIN members m ON m.id = c.member_id WHERE c.post_id = ?1 ORDER BY c.created_at ASC LIMIT 500', id)
       const ban = s ? await activeCommentBan(s.id) : null
       return json({
         id: p.id, title: p.title, body: p.body, createdAt: p.created_at, updatedAt: p.updated_at, hasImage: !!p.has_image,
         likes: likes?.n ?? 0, liked: !!liked,
-        comments: comments.map(c => ({ id: c.id, body: c.body, createdAt: c.created_at, username: c.username })),
-        viewer: s ? { username: s.username, isAdmin: !!s.is_admin, commentBan: ban ? { until: ban.expires_at } : null } : null,
+        comments: comments.map(c => ({ id: c.id, body: c.body, createdAt: c.created_at, username: c.username, role: c.role || 'Üye' })),
+        viewer: s ? { username: s.username, isAdmin: (roleLevels[s.role ?? 'Üye'] ?? 0) >= 4, commentBan: ban ? { until: ban.expires_at } : null } : null,
       })
     },
   },
@@ -448,12 +473,10 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
     run: async request => {
       const row = await first<{ mime: string; data: string }>('SELECT mime, data FROM post_images WHERE post_id = ?1', queryParam(request, 'id'))
       if (!row) throw new HttpError('Görsel bulunamadı.', 404)
-      // URL'deki v= değeri görsel her değiştiğinde yenilenir, bu yüzden uzun süre önbelleğe alınabilir.
       return new Response(fromB64(row.data), { headers: { 'Content-Type': row.mime, 'Cache-Control': 'public, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff' } })
     },
   },
 
-  // Misafir de beğenebilir: hesaplı kullanıcı hesabıyla, misafir IP özetiyle tek oy kullanır.
   like: {
     method: 'POST',
     run: async (request, body) => {
@@ -472,7 +495,6 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
     },
   },
 
-  // Yalnızca hesabı olanlar yorum yapabilir
   comment: {
     method: 'POST',
     run: async (request, body) => {
@@ -489,11 +511,10 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
     },
   },
 
-  /* ---------- yönetici: yazılar ---------- */
   'save-post': {
     method: 'POST',
     run: async (request, body) => {
-      await requireAdmin(request)
+      await requireRole(request, 4)
       const title = String(body.title ?? '').trim()
       const text = String(body.body ?? '').trim()
       if (title.length < 3 || title.length > 120) throw new HttpError('Başlık 3–120 karakter olmalı.')
@@ -522,7 +543,7 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
   'delete-post': {
     method: 'POST',
     run: async (request, body) => {
-      await requireAdmin(request)
+      await requireRole(request, 4)
       const id = String(body.id ?? '')
       await DB().batch([
         DB().prepare('DELETE FROM post_images WHERE post_id = ?1').bind(id),
@@ -534,37 +555,34 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
     },
   },
 
-  /* ---------- yönetici: moderasyon ---------- */
   'comments-admin': {
     method: 'GET',
     run: async request => {
-      await requireAdmin(request)
+      await requireRole(request, 2)
       const rows = await all<any>(
-        `SELECT c.id, c.body, c.created_at, c.ip_hash, m.id AS member_id, m.username, p.title AS post_title,
+        `SELECT c.id, c.body, c.created_at, c.ip_hash, m.id AS member_id, m.username, m.role, p.title AS post_title,
                 EXISTS(SELECT 1 FROM bans b WHERE b.kind = 'comment' AND b.member_id = m.id AND (b.expires_at IS NULL OR b.expires_at > ?1)) AS comment_banned
            FROM comments c JOIN members m ON m.id = c.member_id JOIN posts p ON p.id = c.post_id
           ORDER BY c.created_at DESC LIMIT 100`,
         Date.now(),
       )
-      return json(rows.map(r => ({ id: r.id, body: r.body, createdAt: r.created_at, username: r.username, memberId: r.member_id, postTitle: r.post_title, ipTag: String(r.ip_hash).slice(0, 8), commentBanned: !!r.comment_banned })))
+      return json(rows.map(r => ({ id: r.id, body: r.body, createdAt: r.created_at, username: r.username, role: r.role || 'Üye', memberId: r.member_id, postTitle: r.post_title, ipTag: String(r.ip_hash).slice(0, 8), commentBanned: !!r.comment_banned })))
     },
   },
 
   'delete-comment': {
     method: 'POST',
     run: async (request, body) => {
-      await requireAdmin(request)
+      await requireRole(request, 2)
       await run('DELETE FROM comments WHERE id = ?1', String(body.id ?? ''))
       return json({ ok: true })
     },
   },
 
-  // kind: 'comment' (hesaba yorum yasağı) | 'ip' (bağlantı yasağı). hours boşsa süresiz.
-  // Hedef: commentId (yorumu yazan hesap / yorumun IP özeti) ya da memberId (yalnızca yorum yasağı).
   ban: {
     method: 'POST',
     run: async (request, body) => {
-      await requireAdmin(request)
+      const s = await requireRole(request, 2)
       const kind = body.kind === 'ip' ? 'ip' : body.kind === 'comment' ? 'comment' : null
       if (!kind) throw new HttpError('Geçersiz yasak türü.')
       const hours = body.hours === null || body.hours === undefined || body.hours === '' ? null : Number(body.hours)
@@ -574,11 +592,16 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       const comment = body.commentId ? await first<{ member_id: string; ip_hash: string }>('SELECT member_id, ip_hash FROM comments WHERE id = ?1', String(body.commentId)) : null
       if (body.commentId && !comment) throw new HttpError('Yorum bulunamadı.', 404)
       const id = crypto.randomUUID()
+      
       if (kind === 'comment') {
         const memberId = comment?.member_id ?? String(body.memberId ?? '')
-        const target = await first<{ id: string; is_admin: number }>('SELECT id, is_admin FROM members WHERE id = ?1', memberId)
+        const target = await first<{ id: string; role: string }>('SELECT id, role FROM members WHERE id = ?1', memberId)
         if (!target) throw new HttpError('Hesap bulunamadı.', 404)
-        if (target.is_admin) throw new HttpError('Yönetici hesabı yasaklanamaz.')
+        
+        const targetLevel = roleLevels[target.role ?? 'Üye'] ?? 0
+        const callerLevel = roleLevels[s.role ?? 'Üye'] ?? 0
+        if (targetLevel >= callerLevel && callerLevel < 5) throw new HttpError('Kendi seviyenizdeki veya üstünüzdeki hesapları yasaklayamazsınız.')
+        
         await run('DELETE FROM bans WHERE kind = \'comment\' AND member_id = ?1', target.id)
         await run('INSERT INTO bans (id, kind, member_id, ip_hash, expires_at, reason, created_at) VALUES (?1, \'comment\', ?2, NULL, ?3, ?4, ?5)', id, target.id, expiresAt, reason, Date.now())
       } else {
@@ -594,7 +617,7 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
   bans: {
     method: 'GET',
     run: async request => {
-      await requireAdmin(request)
+      await requireRole(request, 2)
       const rows = await all<any>(
         `SELECT b.id, b.kind, b.ip_hash, b.expires_at, b.reason, b.created_at, m.username
            FROM bans b LEFT JOIN members m ON m.id = b.member_id
@@ -608,25 +631,24 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
   unban: {
     method: 'POST',
     run: async (request, body) => {
-      await requireAdmin(request)
+      await requireRole(request, 2)
       await run('DELETE FROM bans WHERE id = ?1', String(body.id ?? ''))
       return json({ ok: true })
     },
   },
 
-  // Tek seferlik: ilk admin hesabını oluşturur. SETUP_TOKEN secret'ı gerekir, admin varsa çalışmaz.
   bootstrap: {
     method: 'POST',
     run: async (request, body) => {
       await rateLimit(request, 'bootstrap', 5, 60 * 60)
       const secret = SETUP_TOKEN()
       if (!secret || body.token !== secret) throw new HttpError('Yetkisiz.', 403)
-      if (await first('SELECT 1 FROM members WHERE is_admin = 1')) throw new HttpError('Admin zaten mevcut.', 409)
+      if (await first('SELECT 1 FROM members WHERE is_admin = 1 OR role = \'Kurucu\'')) throw new HttpError('Admin zaten mevcut.', 409)
       const email = String(body.email ?? '').trim().toLowerCase()
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError('Geçerli bir e-posta gir.')
       const password = validatePassword(body.password)
       await run(
-        'INSERT INTO members (id, username, email, status, is_admin, password_hash, created_at) VALUES (?1, \'admin\', ?2, \'active\', 1, ?3, ?4)',
+        'INSERT INTO members (id, username, email, status, is_admin, role, password_hash, created_at) VALUES (?1, \'admin\', ?2, \'active\', 1, \'Kurucu\', ?3, ?4)',
         crypto.randomUUID(), email, await hashPassword(password), new Date().toISOString(),
       )
       return json({ ok: true })
@@ -636,20 +658,18 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
 
 async function handle(request: Request, action: string) {
   try {
+    await runMigrations()
     const entry = Object.hasOwn(actions, action) ? actions[action] : undefined
     if (!entry || entry.method !== request.method) throw new HttpError('Bulunamadı.', 404)
-    // IP yasağı: yasaklı bağlantıdan hiçbir eylem çalışmaz (yönetici kendini kilitlemesin diye hariç)
     if (await isIpBanned(await ipHashOf(request))) {
       const viewer = await currentSession(request)
-      if (!viewer?.is_admin) throw new HttpError('Bu bağlantıdan erişim kısıtlandı.', 403)
+      if (!viewer?.is_admin && viewer?.role !== 'Kurucu' && viewer?.role !== 'Admin') throw new HttpError('Bu bağlantıdan erişim kısıtlandı.', 403)
     }
     let body: any = {}
     if (request.method === 'POST') {
-      // CSRF: aynı origin + JSON zorunlu
       const origin = request.headers.get('Origin')
       if (origin && new URL(origin).host !== new URL(request.url).host) throw new HttpError('Geçersiz istek kaynağı.', 403)
       if (!(request.headers.get('Content-Type') ?? '').includes('application/json')) throw new HttpError('Geçersiz istek.', 415)
-      // Gövde boyutu sınırı (fotoğraflı yazı ~900 KB, diğer her şey çok küçük)
       if (Number(request.headers.get('Content-Length') ?? 0) > 1_200_000) throw new HttpError('İstek çok büyük.', 413)
       body = await request.json().catch(() => { throw new HttpError('Geçersiz istek gövdesi.') })
     }
