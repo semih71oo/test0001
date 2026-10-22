@@ -1,8 +1,13 @@
 export const developerRoles = ['Kurucu', 'Admin', 'Moderatör', 'Developer', 'Tasarımcı'] as const
 export type DeveloperRole = typeof developerRoles[number]
 export type Developer = { id: string; name: string; role: DeveloperRole }
-export type Member = { id: string; username: string; email: string; status: 'pending' | 'active'; createdAt: string }
-export type Session = { profile: Member; isAdmin: boolean }
+
+// Yeni hesap rolleri
+export const accountRoles = ['Üye', 'Özel Üye', 'Moderatör', 'Baş Moderatör', 'Admin', 'Kurucu'] as const
+export type AccountRole = typeof accountRoles[number]
+
+export type Member = { id: string; username: string; email: string; status: 'pending' | 'active'; createdAt: string; role: AccountRole }
+export type Session = { profile: Member; isAdmin: boolean; isMod: boolean }
 
 export class ApiError extends Error {
   constructor(message: string, public status: number) {
