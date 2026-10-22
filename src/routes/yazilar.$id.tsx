@@ -12,6 +12,20 @@ export const Route = createFileRoute('/yazilar/$id')({
   head: () => ({ meta: [{ title: 'Yazı — Semih Algan' }] }),
 })
 
+function AccountRoleBadge({ role }: { role: string }) {
+  if (!role || role === 'Üye') return null
+  let cls = ''
+  switch (role) {
+    case 'Kurucu': cls = 'acc-role-kurucu'; break
+    case 'Admin': cls = 'acc-role-admin'; break
+    case 'Baş Moderatör': cls = 'acc-role-bas-moderator'; break
+    case 'Moderatör': cls = 'acc-role-moderator'; break
+    case 'Özel Üye': cls = 'acc-role-ozel-uye'; break
+  }
+  if (!cls) return null
+  return <span className={`acc-role ${cls}`}>{role}</span>
+}
+
 function PostPage() {
   const { id } = Route.useParams()
   const [post, setPost] = useState<PostDetail | null>(null)
@@ -93,7 +107,12 @@ function PostPage() {
         <ul style={{ listStyle: 'none', padding: 0, display: 'grid', gap: 14 }}>
           {post.comments.map(item => (
             <li key={item.id} className="panel-card" style={{ padding: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: '.9rem' }}><strong>{item.username}</strong><span style={{ opacity: .6 }}>{formatDate(item.createdAt)}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: '.9rem' }}>
+                <strong>
+                  {item.username} <AccountRoleBadge role={item.role} />
+                </strong>
+                <span style={{ opacity: .6 }}>{formatDate(item.createdAt)}</span>
+              </div>
               <p style={{ margin: '8px 0 0', whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>{item.body}</p>
             </li>
           ))}
