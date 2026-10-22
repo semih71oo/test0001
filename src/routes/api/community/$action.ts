@@ -27,9 +27,14 @@ async function runMigrations() {
   if (dbMigrated) return
   try {
     await DB().prepare("ALTER TABLE members ADD COLUMN role TEXT DEFAULT 'Üye'").run()
-    await DB().prepare("UPDATE members SET role = 'Kurucu' WHERE is_admin = 1").run()
   } catch (e) {
-    // Sütun zaten varsa hata verir, yoksayarız.
+    // Sütun zaten varsa yoksay
+  }
+  try {
+    // Hem is_admin = 1 olanları hem de 'founder' yazanları otomatik Türkçe 'Kurucu'ya güncelle
+    await DB().prepare("UPDATE members SET role = 'Kurucu' WHERE is_admin = 1 OR LOWER(role) = 'founder' OR LOWER(role) = 'kurucu'").run()
+  } catch (e) {
+    // Hata durumunda yoksay
   }
   dbMigrated = true
 }
@@ -98,13 +103,24 @@ function readCookie(request: Request, name: string) {
 
 type SessionRow = { id: string; username: string; email: string; status: 'pending' | 'active'; is_admin: number; role: string; created_at: string }
 
-// ROL SEVİYELERİ (Hiyerarşi)
+// GELİŞMİŞ ROL TANIMA & HİYERARŞİ (Hem İngilizce hem Türkçe destekler, is_admin'i korur)
+function getRoleInfo(role?: string | null, isAdmin?: number): { role: string; level: number } {
+  const r = (role ?? '').trim().toLowerCase()
+  if (isAdmin === 1 || r === 'kurucu' || r === 'founder') return { role: 'Kurucu', level: 5 }
+  if (r === 'admin') return { role: 'Admin', level: 4 }
+  if (r === 'baş moderatör' || r === 'bas moderator' || r === 'head mod') return { role: 'Baş Moderatör', level: 3 }
+  if (r === 'moderatör' || r === 'moderator' || r === 'mod') return { role: 'Moderatör', level: 2 }
+  if (r === 'özel üye' || r === 'ozel uye' || r === 'vip') return { role: 'Özel Üye', level: 1 }
+  return { role: 'Üye', level: 0 }
+}
+
 const roleLevels: Record<string, number> = { 'Üye': 0, 'Özel Üye': 1, 'Moderatör': 2, 'Baş Moderatör': 3, 'Admin': 4, 'Kurucu': 5 }
 
 async function isMaintenanceOn() {
   const row = await first<{ value: string }>('SELECT value FROM settings WHERE key = \'maintenance_on\'')
   return row?.value === '1'
 }
+
 async function currentSession(request: Request) {
   const token = readCookie(request, COOKIE)
   if (!token) return null
@@ -114,25 +130,31 @@ async function currentSession(request: Request) {
       WHERE s.token_hash = ?1 AND s.expires_at > ?2 AND m.status = 'active'`,
     await sha256(token), Date.now(),
   )
-  const level = roleLevels[row?.role ?? 'Üye'] ?? 0
-  if (row && level < 4 && (await isMaintenanceOn())) return null
+  if (!row) return null
+  const info = getRoleInfo(row.role, row.is_admin)
+  row.role = info.role
+  if (info.level < 4 && (await isMaintenanceOn())) return null
   return row
 }
+
 async function requireSession(request: Request) {
   const s = await currentSession(request)
   if (!s) throw new HttpError('Oturum bulunamadı. Lütfen giriş yap.', 401)
   return s
 }
+
 // YETKİ KONTROLÜ
 async function requireRole(request: Request, minLevel: number) {
   const s = await requireSession(request)
-  const level = roleLevels[s.role ?? 'Üye'] ?? 0
-  if (level < minLevel) throw new HttpError('Bu işlem için yetkiniz yok.', 403)
+  const info = getRoleInfo(s.role, s.is_admin)
+  if (info.level < minLevel) throw new HttpError('Bu işlem için yetkiniz yok.', 403)
   return s
 }
 
-const memberDto = (m: any) =>
-  ({ id: m.id, username: m.username, email: m.email, status: m.status, createdAt: m.created_at, role: m.role || 'Üye' })
+const memberDto = (m: any) => {
+  const info = getRoleInfo(m.role, m.is_admin)
+  return { id: m.id, username: m.username, email: m.email, status: m.status, createdAt: m.created_at, role: info.role }
+}
 
 function validatePassword(p: unknown): string {
   if (typeof p !== 'string' || p.length < 12) throw new HttpError('Şifre en az 12 karakter olmalı.')
@@ -197,16 +219,16 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
     method: 'GET',
     run: async request => {
       const s = await requireSession(request)
-      const level = roleLevels[s.role ?? 'Üye'] ?? 0
-      return json({ profile: memberDto(s), isAdmin: level >= 4, isMod: level >= 2 })
+      const info = getRoleInfo(s.role, s.is_admin)
+      return json({ profile: memberDto(s), isAdmin: info.level >= 4, isMod: info.level >= 2 })
     },
   },
 
   members: {
     method: 'GET',
     run: async request => {
-      await requireRole(request, 4) // Sadece Admin ve Kurucu üyeleri görebilir/yönetebilir
-      const rows = await all<any>('SELECT id, username, email, status, role, created_at FROM members ORDER BY created_at DESC')
+      await requireRole(request, 4)
+      const rows = await all<any>('SELECT id, username, email, status, role, created_at, is_admin FROM members ORDER BY created_at DESC')
       return json(rows.map(memberDto))
     },
   },
@@ -214,17 +236,17 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
   'set-role': {
     method: 'POST',
     run: async (request, body) => {
-      const s = await requireRole(request, 4) // Admin+
+      const s = await requireRole(request, 4)
       const targetId = String(body.id ?? '')
       const newRole = String(body.role ?? '')
       if (!Object.keys(roleLevels).includes(newRole)) throw new HttpError('Geçersiz rol.')
       
-      const target = await first<{ role: string }>('SELECT role FROM members WHERE id = ?1', targetId)
+      const target = await first<{ role: string; is_admin: number }>('SELECT role, is_admin FROM members WHERE id = ?1', targetId)
       if (!target) throw new HttpError('Kullanıcı bulunamadı.', 404)
       
-      const callerLevel = roleLevels[s.role ?? 'Üye'] ?? 0
-      const targetLevel = roleLevels[target.role ?? 'Üye'] ?? 0
-      const newLevel = roleLevels[newRole] ?? 0
+      const callerLevel = getRoleInfo(s.role, s.is_admin).level
+      const targetLevel = getRoleInfo(target.role, target.is_admin).level
+      const newLevel = getRoleInfo(newRole).level
       
       if (callerLevel < 5) {
         if (targetLevel === 5) throw new HttpError('Kurucu hesabı değiştirilemez.')
@@ -292,12 +314,12 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       const password = String(body.password ?? '')
       const founder = !!body.founder
       const member = founder
-        ? await first<{ id: string; password_hash: string; role: string }>('SELECT id, password_hash, role FROM members WHERE email = ?1 AND status = \'active\'', identifier)
-        : await first<{ id: string; password_hash: string; role: string }>('SELECT id, password_hash, role FROM members WHERE username = ?1 AND status = \'active\'', identifier)
+        ? await first<{ id: string; password_hash: string; role: string; is_admin: number }>('SELECT id, password_hash, role, is_admin FROM members WHERE email = ?1 AND status = \'active\'', identifier)
+        : await first<{ id: string; password_hash: string; role: string; is_admin: number }>('SELECT id, password_hash, role, is_admin FROM members WHERE username = ?1 AND status = \'active\'', identifier)
       if (!(await verifyPassword(password, member?.password_hash ?? null)) || !member) throw new HttpError('Kullanıcı adı veya şifre hatalı.', 401)
       
-      const level = roleLevels[member.role ?? 'Üye'] ?? 0
-      if (level < 4 && (await isMaintenanceOn())) throw new HttpError('Site bakımda. Şu an yalnızca yönetici giriş yapabilir.', 503)
+      const info = getRoleInfo(member.role, member.is_admin)
+      if (info.level < 4 && (await isMaintenanceOn())) throw new HttpError('Site bakımda. Şu an yalnızca yönetici giriş yapabilir.', 503)
       
       const token = randomToken()
       await run('INSERT INTO sessions (token_hash, member_id, expires_at) VALUES (?1, ?2, ?3)', await sha256(token), member.id, Date.now() + SESSION_TTL_MS)
@@ -414,8 +436,8 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       const rows = await all<{ key: string; value: string }>('SELECT key, value FROM settings WHERE key IN (\'maintenance_on\', \'maintenance_message\')')
       const map = Object.fromEntries(rows.map(r => [r.key, r.value]))
       const viewer = await currentSession(request)
-      const level = roleLevels[viewer?.role ?? 'Üye'] ?? 0
-      return json({ on: map.maintenance_on === '1', message: map.maintenance_message ?? '', viewerIsAdmin: level >= 4 })
+      const info = getRoleInfo(viewer?.role, viewer?.is_admin)
+      return json({ on: map.maintenance_on === '1', message: map.maintenance_message ?? '', viewerIsAdmin: info.level >= 4 })
     },
   },
 
@@ -457,13 +479,13 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       const voter = await voterKey(request, s)
       const likes = await first<{ n: number }>('SELECT COUNT(*) AS n FROM post_likes WHERE post_id = ?1', id)
       const liked = await first('SELECT 1 FROM post_likes WHERE post_id = ?1 AND voter = ?2', id, voter)
-      const comments = await all<any>('SELECT c.id, c.body, c.created_at, m.username, m.role FROM comments c JOIN members m ON m.id = c.member_id WHERE c.post_id = ?1 ORDER BY c.created_at ASC LIMIT 500', id)
+      const comments = await all<any>('SELECT c.id, c.body, c.created_at, m.username, m.role, m.is_admin FROM comments c JOIN members m ON m.id = c.member_id WHERE c.post_id = ?1 ORDER BY c.created_at ASC LIMIT 500', id)
       const ban = s ? await activeCommentBan(s.id) : null
       return json({
         id: p.id, title: p.title, body: p.body, createdAt: p.created_at, updatedAt: p.updated_at, hasImage: !!p.has_image,
         likes: likes?.n ?? 0, liked: !!liked,
-        comments: comments.map(c => ({ id: c.id, body: c.body, createdAt: c.created_at, username: c.username, role: c.role || 'Üye' })),
-        viewer: s ? { username: s.username, isAdmin: (roleLevels[s.role ?? 'Üye'] ?? 0) >= 4, commentBan: ban ? { until: ban.expires_at } : null } : null,
+        comments: comments.map(c => ({ id: c.id, body: c.body, createdAt: c.created_at, username: c.username, role: getRoleInfo(c.role, c.is_admin).role })),
+        viewer: s ? { username: s.username, isAdmin: getRoleInfo(s.role, s.is_admin).level >= 4, commentBan: ban ? { until: ban.expires_at } : null } : null,
       })
     },
   },
@@ -560,13 +582,13 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
     run: async request => {
       await requireRole(request, 2)
       const rows = await all<any>(
-        `SELECT c.id, c.body, c.created_at, c.ip_hash, m.id AS member_id, m.username, m.role, p.title AS post_title,
+        `SELECT c.id, c.body, c.created_at, c.ip_hash, m.id AS member_id, m.username, m.role, m.is_admin, p.title AS post_title,
                 EXISTS(SELECT 1 FROM bans b WHERE b.kind = 'comment' AND b.member_id = m.id AND (b.expires_at IS NULL OR b.expires_at > ?1)) AS comment_banned
            FROM comments c JOIN members m ON m.id = c.member_id JOIN posts p ON p.id = c.post_id
           ORDER BY c.created_at DESC LIMIT 100`,
         Date.now(),
       )
-      return json(rows.map(r => ({ id: r.id, body: r.body, createdAt: r.created_at, username: r.username, role: r.role || 'Üye', memberId: r.member_id, postTitle: r.post_title, ipTag: String(r.ip_hash).slice(0, 8), commentBanned: !!r.comment_banned })))
+      return json(rows.map(r => ({ id: r.id, body: r.body, createdAt: r.created_at, username: r.username, role: getRoleInfo(r.role, r.is_admin).role, memberId: r.member_id, postTitle: r.post_title, ipTag: String(r.ip_hash).slice(0, 8), commentBanned: !!r.comment_banned })))
     },
   },
 
@@ -595,11 +617,11 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       
       if (kind === 'comment') {
         const memberId = comment?.member_id ?? String(body.memberId ?? '')
-        const target = await first<{ id: string; role: string }>('SELECT id, role FROM members WHERE id = ?1', memberId)
+        const target = await first<{ id: string; role: string; is_admin: number }>('SELECT id, role, is_admin FROM members WHERE id = ?1', memberId)
         if (!target) throw new HttpError('Hesap bulunamadı.', 404)
         
-        const targetLevel = roleLevels[target.role ?? 'Üye'] ?? 0
-        const callerLevel = roleLevels[s.role ?? 'Üye'] ?? 0
+        const targetLevel = getRoleInfo(target.role, target.is_admin).level
+        const callerLevel = getRoleInfo(s.role, s.is_admin).level
         if (targetLevel >= callerLevel && callerLevel < 5) throw new HttpError('Kendi seviyenizdeki veya üstünüzdeki hesapları yasaklayamazsınız.')
         
         await run('DELETE FROM bans WHERE kind = \'comment\' AND member_id = ?1', target.id)
@@ -643,7 +665,7 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       await rateLimit(request, 'bootstrap', 5, 60 * 60)
       const secret = SETUP_TOKEN()
       if (!secret || body.token !== secret) throw new HttpError('Yetkisiz.', 403)
-      if (await first('SELECT 1 FROM members WHERE is_admin = 1 OR role = \'Kurucu\'')) throw new HttpError('Admin zaten mevcut.', 409)
+      if (await first('SELECT 1 FROM members WHERE is_admin = 1 OR role = \'Kurucu\' OR role = \'founder\'')) throw new HttpError('Admin zaten mevcut.', 409)
       const email = String(body.email ?? '').trim().toLowerCase()
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError('Geçerli bir e-posta gir.')
       const password = validatePassword(body.password)
@@ -663,7 +685,7 @@ async function handle(request: Request, action: string) {
     if (!entry || entry.method !== request.method) throw new HttpError('Bulunamadı.', 404)
     if (await isIpBanned(await ipHashOf(request))) {
       const viewer = await currentSession(request)
-      if (!viewer?.is_admin && viewer?.role !== 'Kurucu' && viewer?.role !== 'Admin') throw new HttpError('Bu bağlantıdan erişim kısıtlandı.', 403)
+      if (getRoleInfo(viewer?.role, viewer?.is_admin).level < 4) throw new HttpError('Bu bağlantıdan erişim kısıtlandı.', 403)
     }
     let body: any = {}
     if (request.method === 'POST') {
