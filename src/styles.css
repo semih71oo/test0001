@@ -409,4 +409,160 @@ button:disabled { opacity: .6; cursor: wait; }
   background: linear-gradient(135deg, #fdf2f8 0%, #fce7f3 100%);
   color: #9d174d;
   border: 1px solid #fbcfe8;
-                       }
+}
+
+/* Güncellemeler (Changelog) Zaman Çizelgesi Stilleri */
+.updates-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  position: relative;
+  padding-left: 32px;
+  margin-top: 24px;
+}
+.updates-timeline::before {
+  content: '';
+  position: absolute;
+  top: 15px;
+  bottom: 15px;
+  left: 9px;
+  width: 2px;
+  background: linear-gradient(180deg, #255b43 0%, #cbd6c3 100%);
+  border-radius: 2px;
+}
+.update-item {
+  position: relative;
+  animation: panel-reveal 0.4s ease-out backwards;
+}
+.update-marker {
+  position: absolute;
+  left: -32px;
+  top: 24px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--paper);
+  border: 2px solid var(--green);
+  display: grid;
+  place-items: center;
+  z-index: 2;
+  box-shadow: 0 0 0 4px #edf2e5;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.update-item:hover .update-marker {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 6px #e0ecd8;
+}
+.update-marker-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+}
+.update-card {
+  padding: 24px 26px;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease, border-color 0.25s ease;
+}
+.update-card:hover {
+  transform: translateY(-2px);
+  border-color: #bacba9;
+  box-shadow: 0 10px 30px rgba(37, 91, 67, 0.06);
+}
+.update-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.update-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.update-id-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 6px;
+  background: var(--green);
+  color: var(--lime);
+  font-family: monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 6px rgba(37, 91, 67, 0.18);
+}
+.update-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.update-title {
+  margin: 4px 0 10px;
+  font-size: 1.25rem;
+  letter-spacing: -0.4px;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.35;
+}
+.update-accordion {
+  border-top: 1px solid var(--line);
+  margin-top: 14px;
+  padding-top: 12px;
+}
+.update-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 0;
+  padding: 4px 0;
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 600;
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+.update-toggle-btn:hover {
+  color: #1a4833;
+}
+.update-body {
+  margin-top: 12px;
+  padding: 16px 18px;
+  background: #f4f6ee;
+  border: 1px solid #dce4d1;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  line-height: 1.75;
+  color: #3b4e43;
+  white-space: pre-wrap;
+  animation: update-expand 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes update-expand {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (max-width: 640px) {
+  .updates-timeline {
+    padding-left: 22px;
+  }
+  .update-marker {
+    left: -22px;
+    width: 16px;
+    height: 16px;
+  }
+  .update-card {
+    padding: 18px 20px;
+  }
+  .update-title {
+    font-size: 1.1rem;
+  }
+}
