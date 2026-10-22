@@ -13,6 +13,7 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
         <nav className="desktop-nav" aria-label="Ana menü">
           <Link to="/">Ana Sayfa</Link>
           <Link to="/yazilar" activeProps={{ className: 'nav-active' }}>Yazılar</Link>
+          <Link to="/guncellemeler" activeProps={{ className: 'nav-active' }}>Güncellemeler</Link>
         </nav>
       </header>
       <main className="container section-space" style={{ maxWidth: 760 }}>
@@ -22,6 +23,7 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
         {children}
       </main>
       <footer className="container" style={{ maxWidth: 760, display: 'flex', flexWrap: 'wrap', gap: '8px 18px', padding: '24px 0 40px', opacity: .75, fontSize: '.9rem' }}>
+        <Link to="/guncellemeler">Güncellemeler</Link>
         {legalLinks.map(link => (
           <Link key={link.path} to={link.path}>
             {link.label}
