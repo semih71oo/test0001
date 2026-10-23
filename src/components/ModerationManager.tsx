@@ -1,4 +1,3 @@
---- START OF FILE src/components/ModerationManager.tsx ---
 import { useEffect, useState } from 'react'
 import { Ban, Filter, MessageCircle, ShieldAlert, Trash2, X } from 'lucide-react'
 import { communityApi } from '../lib/community'
@@ -195,4 +194,3 @@ export function ModerationManager({ members }: { members: Member[] }) {
     </section>
   </>
 }
---- END OF FILE src/components/ModerationManager.tsx ---
