@@ -1,4 +1,3 @@
---- START OF FILE src/styles.css ---
 @import "tailwindcss" source("../");
 
 :root { --paper: #fafbf6; --ink: #253d34; --muted: #788078; --green: #255b43; --lime: #d5ee91; --line: #e4e8df; --font: 'Manrope', sans-serif; }
@@ -579,4 +578,3 @@ button:disabled { opacity: .6; cursor: wait; }
     font-size: 1.1rem;
   }
 }
---- END OF FILE src/styles.css ---
