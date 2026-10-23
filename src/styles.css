@@ -308,6 +308,8 @@ button:disabled { opacity: .6; cursor: wait; }
 .account-state { display: inline-flex; align-items: center; gap: 5px; padding: 5px 8px; border-radius: 5px; font-size: 9px; white-space: nowrap; }
 .account-state.active { background: #e9f1df; color: #5a7d44; }
 .account-state.pending { background: #f4efdd; color: #977e47; }
+.account-state.suspended { background: #fff2eb; color: #974d34; } /* Askıya alınmış hesap rozeti */
+
 .compact-form { margin-top: 22px; }
 .compact-form .button { border: 0; padding-block: 13px; }
 .management-grid { display: grid; grid-template-columns: minmax(270px, .9fr) minmax(0, 1.1fr); gap: 22px; align-items: start; }
@@ -343,6 +345,12 @@ button:disabled { opacity: .6; cursor: wait; }
 .code-placeholder-lines { display: flex; gap: 7px; margin-top: 29px; }
 .code-placeholder-lines span { width: 34px; height: 7px; border-radius: 2px; background: #dbe5cb; }
 .members-card { margin-top: 24px; }
+
+/* Arama Kutusu Stilleri */
+.members-search { display: flex; gap: 10px; margin-bottom: 16px; }
+.members-search input { flex: 1; background: #fafbf6; border: 1px solid #dce2d3; border-radius: 8px; height: 42px; padding: 0 14px; font-family: var(--font); font-size: 12px; color: var(--ink); transition: border-color .2s, box-shadow .2s; }
+.members-search input:focus { outline: none; border-color: #87a66c; box-shadow: 0 0 0 3px rgba(135, 166, 108, 0.2); }
+
 .members-table-wrap { overflow-x: auto; }
 .members-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 18px; text-align: left; }
 .members-table th { font-size: 9px; font-weight: 500; color: #909b84; border-bottom: 1px solid var(--line); padding: 14px 12px; white-space: nowrap; }
@@ -361,6 +369,19 @@ button:disabled { opacity: .6; cursor: wait; }
 .panel-gate > p { font-size: 12px; color: var(--muted); line-height: 1.9; }
 .panel-gate > svg { color: #688753; }
 .panel-loading-bar { height: 4px; width: 180px; background: #dce6cd; border-radius: 5px; animation: skeleton-pulse 1s ease-in-out infinite alternate; }
+
+/* Silme Onay Modalı (5 Saniye Geri Sayım) */
+.modal-overlay { position: fixed; inset: 0; background: rgba(37, 61, 52, 0.4); backdrop-filter: blur(3px); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 20px; animation: panel-reveal 0.2s ease-out; }
+.modal-content { background: #fffefa; border: 1px solid #e0e5d7; border-radius: 14px; padding: 32px; max-width: 420px; width: 100%; box-shadow: 0 20px 60px rgba(27, 65, 40, 0.15); text-align: center; }
+.modal-content h3 { font-size: 20px; margin-bottom: 12px; color: #974d34; }
+.modal-content p { font-size: 13px; color: var(--muted); line-height: 1.6; margin-bottom: 24px; }
+.modal-actions { display: flex; gap: 12px; justify-content: center; }
+.modal-actions button { flex: 1; padding: 12px; border-radius: 8px; font-size: 12px; font-weight: 600; transition: all 0.2s ease; }
+.modal-btn-cancel { background: #f0f3e7; border: 1px solid #dce2d3; color: #5b6e5e; }
+.modal-btn-cancel:hover { background: #e4e9d9; }
+.modal-btn-danger { background: #fff1e9; border: 1px solid #e5cfc3; color: #98583d; }
+.modal-btn-danger:hover:not(:disabled) { background: #ffe4d6; }
+.modal-btn-danger:disabled { opacity: 0.6; cursor: not-allowed; }
 
 @media (min-width: 1600px) { .workspace-header { padding-inline: 60px; }.workspace-layout { grid-template-columns: 265px minmax(0, 1fr); }.workspace-main { margin-inline: auto; padding-inline: 60px; } }
 @media (max-width: 1150px) { .auth-layout { gap: 45px; grid-template-columns: 1fr 410px; }.workspace-main { padding: 30px 25px 0; }.workspace-layout { grid-template-columns: 211px minmax(0, 1fr); }.workspace-sidebar { padding-inline: 15px; }.workspace-main .developer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }.management-grid { gap: 17px; }.panel-card { padding: 23px; }.secure-tag { display: none; }.welcome-code { width: 83px; margin: 0; }.workspace-welcome { padding: 26px; }.stat-card { padding: 17px; } }
@@ -577,4 +598,4 @@ button:disabled { opacity: .6; cursor: wait; }
   .update-title {
     font-size: 1.1rem;
   }
-}
+                   }
