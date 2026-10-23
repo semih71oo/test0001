@@ -1,3 +1,4 @@
+--- START OF FILE src/styles.css ---
 @import "tailwindcss" source("../");
 
 :root { --paper: #fafbf6; --ink: #253d34; --muted: #788078; --green: #255b43; --lime: #d5ee91; --line: #e4e8df; --font: 'Manrope', sans-serif; }
@@ -201,8 +202,20 @@ h2 { font-size: 34px; line-height: 1.24; letter-spacing: -1.3px; font-weight: 50
 .form-field { display: flex; flex-direction: column; gap: 9px; margin-bottom: 20px; min-width: 0; }
 .form-field label { font-size: 11px; font-weight: 600; color: #4d5e4e; }
 .form-field input, .form-field select { width: 100%; min-width: 0; background: #fafbf6; border: 1px solid #dce2d3; border-radius: 6px; height: 47px; padding: 0 13px; font-family: var(--font); font-size: 12px; color: var(--ink); transition: border-color .2s, box-shadow .2s; }
+.form-field select { appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2361715b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 13px center; padding-right: 36px; cursor: pointer; }
 .form-field input::placeholder { color: #98a08f; font-size: 11px; }
 .form-field input:focus, .form-field select:focus { outline: 2px solid #87a66c; outline-offset: 2px; }
+
+/* Özel Select (Filtreleme ve Atamalar için) */
+.custom-select { appearance: none; -webkit-appearance: none; width: 100%; background-color: #fafbf6; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2361715b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; border: 1px solid #dce2d3; border-radius: 8px; padding: 0 36px 0 14px; height: 42px; font-family: var(--font); font-size: 12px; font-weight: 500; color: var(--ink); cursor: pointer; transition: all 0.2s ease; box-shadow: 0 2px 4px rgba(37, 91, 67, 0.02); }
+.custom-select:hover { border-color: #bacba9; background-color: #fffefa; }
+.custom-select:focus { outline: none; border-color: #87a66c; box-shadow: 0 0 0 3px rgba(135, 166, 108, 0.2); }
+.custom-select:disabled { opacity: 0.6; cursor: not-allowed; background-color: #f0f3e8; }
+
+/* Moderasyon Filtre Çubuğu */
+.filter-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; padding: 16px; background: #f4f6ee; border: 1px solid #dce4d1; border-radius: 10px; }
+.filter-bar label { font-size: 11px; font-weight: 600; color: #4d5e4e; white-space: nowrap; }
+
 .password-input { position: relative; }
 .password-input input { padding-right: 48px; }
 .password-input button { display: grid; place-items: center; position: absolute; right: 3px; top: 3px; height: 41px; width: 42px; background: transparent; border: 0; border-radius: 5px; color: #879478; }
@@ -566,3 +579,4 @@ button:disabled { opacity: .6; cursor: wait; }
     font-size: 1.1rem;
   }
 }
+--- END OF FILE src/styles.css ---
