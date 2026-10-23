@@ -108,7 +108,7 @@ function readCookie(request: Request, name: string) {
   return match ? decodeURIComponent(match.slice(name.length + 1)) : null
 }
 
-type SessionRow = { id: string; username: string; email: string; status: 'pending' | 'active'; is_admin: number; role: string; created_at: string }
+type SessionRow = { id: string; username: string; email: string; status: 'pending' | 'active' | 'suspended'; is_admin: number; role: string; created_at: string }
 
 function getRoleInfo(role?: string | null, isAdmin?: number): { role: string; level: number } {
   const r = (role ?? '').trim().toLowerCase()
@@ -265,6 +265,59 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
     },
   },
 
+  'set-member-status': {
+    method: 'POST',
+    run: async (request, body) => {
+      const s = await requireRole(request, 4)
+      const targetId = String(body.id ?? '')
+      const newStatus = String(body.status ?? '')
+      if (!['active', 'suspended'].includes(newStatus)) throw new HttpError('Geçersiz durum.')
+      if (targetId === s.id) throw new HttpError('Kendi hesabınızı askıya alamazsınız.', 400)
+
+      const target = await first<{ role: string; is_admin: number }>('SELECT role, is_admin FROM members WHERE id = ?1', targetId)
+      if (!target) throw new HttpError('Kullanıcı bulunamadı.', 404)
+
+      const callerLevel = getRoleInfo(s.role, s.is_admin).level
+      const targetLevel = getRoleInfo(target.role, target.is_admin).level
+
+      if (targetLevel >= callerLevel) throw new HttpError('Kendi seviyenizdeki veya üstünüzdeki hesapları askıya alamazsınız.', 403)
+
+      await run('UPDATE members SET status = ?1 WHERE id = ?2', newStatus, targetId)
+      if (newStatus === 'suspended') {
+        await run('DELETE FROM sessions WHERE member_id = ?1', targetId)
+      }
+      return json({ ok: true })
+    },
+  },
+
+  'delete-member': {
+    method: 'POST',
+    run: async (request, body) => {
+      const s = await requireRole(request, 4)
+      const targetId = String(body.id ?? '')
+      if (targetId === s.id) throw new HttpError('Kendi hesabınızı silemezsiniz.', 400)
+
+      const target = await first<{ role: string; is_admin: number }>('SELECT role, is_admin FROM members WHERE id = ?1', targetId)
+      if (!target) throw new HttpError('Kullanıcı bulunamadı.', 404)
+
+      const callerLevel = getRoleInfo(s.role, s.is_admin).level
+      const targetLevel = getRoleInfo(target.role, target.is_admin).level
+
+      if (targetLevel >= callerLevel) throw new HttpError('Kendi seviyenizdeki veya üstünüzdeki hesapları silemezsiniz.', 403)
+
+      await DB().batch([
+        DB().prepare('DELETE FROM sessions WHERE member_id = ?1').bind(targetId),
+        DB().prepare('DELETE FROM reset_tokens WHERE member_id = ?1').bind(targetId),
+        DB().prepare('DELETE FROM activation_codes WHERE member_id = ?1').bind(targetId),
+        DB().prepare('DELETE FROM bans WHERE member_id = ?1').bind(targetId),
+        DB().prepare('DELETE FROM post_likes WHERE voter = ?1').bind(`m:${targetId}`),
+        DB().prepare('DELETE FROM comments WHERE member_id = ?1').bind(targetId),
+        DB().prepare('DELETE FROM members WHERE id = ?1').bind(targetId),
+      ])
+      return json({ ok: true })
+    },
+  },
+
   invite: {
     method: 'POST',
     run: async (request, body) => {
@@ -320,10 +373,13 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       const identifier = String(body.username ?? '').trim().toLowerCase()
       const password = String(body.password ?? '')
       const founder = !!body.founder
+      
       const member = founder
-        ? await first<{ id: string; password_hash: string; role: string; is_admin: number }>('SELECT id, password_hash, role, is_admin FROM members WHERE email = ?1 AND status = \'active\'', identifier)
-        : await first<{ id: string; password_hash: string; role: string; is_admin: number }>('SELECT id, password_hash, role, is_admin FROM members WHERE username = ?1 AND status = \'active\'', identifier)
+        ? await first<{ id: string; password_hash: string; role: string; is_admin: number; status: string }>('SELECT id, password_hash, role, is_admin, status FROM members WHERE email = ?1 AND status != \'pending\'', identifier)
+        : await first<{ id: string; password_hash: string; role: string; is_admin: number; status: string }>('SELECT id, password_hash, role, is_admin, status FROM members WHERE username = ?1 AND status != \'pending\'', identifier)
+      
       if (!(await verifyPassword(password, member?.password_hash ?? null)) || !member) throw new HttpError('Kullanıcı adı veya şifre hatalı.', 401)
+      if (member.status === 'suspended') throw new HttpError('Hesabınız Askıya Alınmıştır. Lütfen Web Site sahibi ile iletişime geçin.', 403)
 
       const info = getRoleInfo(member.role, member.is_admin)
       if (info.level < 4 && (await isMaintenanceOn())) throw new HttpError('Site bakımda. Şu an yalnızca yönetici giriş yapabilir.', 503)
