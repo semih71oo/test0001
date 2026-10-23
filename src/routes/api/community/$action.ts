@@ -34,6 +34,9 @@ async function runMigrations() {
     await DB().prepare('ALTER TABLE comments ADD COLUMN edited_at INTEGER DEFAULT NULL').run()
   } catch {}
   try {
+    await DB().prepare('ALTER TABLE members ADD COLUMN is_suspended INTEGER DEFAULT 0').run()
+  } catch {}
+  try {
     await DB().prepare(`
       CREATE TABLE IF NOT EXISTS site_updates (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -108,7 +111,7 @@ function readCookie(request: Request, name: string) {
   return match ? decodeURIComponent(match.slice(name.length + 1)) : null
 }
 
-type SessionRow = { id: string; username: string; email: string; status: 'pending' | 'active' | 'suspended'; is_admin: number; role: string; created_at: string }
+type SessionRow = { id: string; username: string; email: string; status: 'pending' | 'active' | 'suspended'; is_admin: number; role: string; created_at: string; is_suspended?: number }
 
 function getRoleInfo(role?: string | null, isAdmin?: number): { role: string; level: number } {
   const r = (role ?? '').trim().toLowerCase()
@@ -131,12 +134,13 @@ async function currentSession(request: Request) {
   const token = readCookie(request, COOKIE)
   if (!token) return null
   const row = await first<SessionRow>(
-    `SELECT m.id, m.username, m.email, m.status, m.is_admin, m.role, m.created_at
+    `SELECT m.id, m.username, m.email, m.status, m.is_admin, m.role, m.created_at, m.is_suspended
        FROM sessions s JOIN members m ON m.id = s.member_id
-      WHERE s.token_hash = ?1 AND s.expires_at > ?2 AND m.status = 'active'`,
+      WHERE s.token_hash = ?1 AND s.expires_at > ?2`,
     await sha256(token), Date.now(),
   )
   if (!row) return null
+  if (row.is_suspended === 1 || row.status === 'suspended' || row.status !== 'active') return null
   const info = getRoleInfo(row.role, row.is_admin)
   row.role = info.role
   if (info.level < 4 && (await isMaintenanceOn())) return null
@@ -158,7 +162,8 @@ async function requireRole(request: Request, minLevel: number) {
 
 const memberDto = (m: any) => {
   const info = getRoleInfo(m.role, m.is_admin)
-  return { id: m.id, username: m.username, email: m.email, status: m.status, createdAt: m.created_at, role: info.role }
+  const status = (m.is_suspended === 1 || m.status === 'suspended') ? 'suspended' : m.status
+  return { id: m.id, username: m.username, email: m.email, status, createdAt: m.created_at, role: info.role }
 }
 
 function validatePassword(p: unknown): string {
@@ -234,7 +239,7 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
     method: 'GET',
     run: async request => {
       await requireRole(request, 4)
-      const rows = await all<any>('SELECT id, username, email, status, role, created_at, is_admin FROM members ORDER BY created_at DESC')
+      const rows = await all<any>('SELECT id, username, email, status, role, created_at, is_admin, is_suspended FROM members ORDER BY created_at DESC')
       return json(rows.map(memberDto))
     },
   },
@@ -274,7 +279,7 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       if (!['active', 'suspended'].includes(newStatus)) throw new HttpError('Geçersiz durum.')
       if (targetId === s.id) throw new HttpError('Kendi hesabınızı askıya alamazsınız.', 400)
 
-      const target = await first<{ role: string; is_admin: number }>('SELECT role, is_admin FROM members WHERE id = ?1', targetId)
+      const target = await first<{ role: string; is_admin: number; status: string }>('SELECT role, is_admin, status FROM members WHERE id = ?1', targetId)
       if (!target) throw new HttpError('Kullanıcı bulunamadı.', 404)
 
       const callerLevel = getRoleInfo(s.role, s.is_admin).level
@@ -282,10 +287,26 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
 
       if (targetLevel >= callerLevel) throw new HttpError('Kendi seviyenizdeki veya üstünüzdeki hesapları askıya alamazsınız.', 403)
 
-      await run('UPDATE members SET status = ?1 WHERE id = ?2', newStatus, targetId)
-      if (newStatus === 'suspended') {
+      const isSuspended = newStatus === 'suspended' ? 1 : 0
+      
+      // is_suspended sütununu güncelle (SQLite kısıtlamasına takılmaz)
+      await run('UPDATE members SET is_suspended = ?1 WHERE id = ?2', isSuspended, targetId)
+
+      // status sütununu da güncellemeyi dene (eğer check constraint yoksa)
+      try {
+        await run('UPDATE members SET status = ?1 WHERE id = ?2', newStatus, targetId)
+      } catch {
+        // Eğer status sütununda CHECK kuralı varsa status'ü active bırak ama is_suspended=1 kalsın
+        if (newStatus === 'suspended') {
+          await run("UPDATE members SET status = 'active' WHERE id = ?1", targetId)
+        }
+      }
+
+      // Askıya alındıysa açık olan tüm oturumlarını anında sonlandır
+      if (isSuspended === 1) {
         await run('DELETE FROM sessions WHERE member_id = ?1', targetId)
       }
+
       return json({ ok: true })
     },
   },
@@ -328,7 +349,7 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) throw new HttpError('Geçerli bir e-posta adresi gir.')
       if (await first('SELECT 1 FROM members WHERE username = ?1', username)) throw new HttpError('Bu kullanıcı adı zaten alınmış.', 409)
       const id = crypto.randomUUID()
-      await run('INSERT INTO members (id, username, email, status, is_admin, role, created_at) VALUES (?1, ?2, ?3, \'pending\', 0, \'Üye\', ?4)', id, username, email, new Date().toISOString())
+      await run('INSERT INTO members (id, username, email, status, is_admin, role, created_at, is_suspended) VALUES (?1, ?2, ?3, \'pending\', 0, \'Üye\', ?4, 0)', id, username, email, new Date().toISOString())
       return json({ ...(await issueCode(id)), username })
     },
   },
@@ -361,7 +382,7 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       const passwordHash = await hashPassword(password)
       const consumed = await run('UPDATE activation_codes SET used_at = ?1 WHERE code_hash = ?2 AND used_at IS NULL AND expires_at > ?1', Date.now(), hash)
       if (consumed.meta.changes !== 1) throw new HttpError('Kod geçersiz veya süresi dolmuş.')
-      await run('UPDATE members SET password_hash = ?1, status = \'active\' WHERE id = ?2', passwordHash, member_id)
+      await run('UPDATE members SET password_hash = ?1, status = \'active\', is_suspended = 0 WHERE id = ?2', passwordHash, member_id)
       return json({ username })
     },
   },
@@ -375,11 +396,11 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       const founder = !!body.founder
       
       const member = founder
-        ? await first<{ id: string; password_hash: string; role: string; is_admin: number; status: string }>('SELECT id, password_hash, role, is_admin, status FROM members WHERE email = ?1 AND status != \'pending\'', identifier)
-        : await first<{ id: string; password_hash: string; role: string; is_admin: number; status: string }>('SELECT id, password_hash, role, is_admin, status FROM members WHERE username = ?1 AND status != \'pending\'', identifier)
+        ? await first<{ id: string; password_hash: string; role: string; is_admin: number; status: string; is_suspended?: number }>('SELECT id, password_hash, role, is_admin, status, is_suspended FROM members WHERE email = ?1 AND status != \'pending\'', identifier)
+        : await first<{ id: string; password_hash: string; role: string; is_admin: number; status: string; is_suspended?: number }>('SELECT id, password_hash, role, is_admin, status, is_suspended FROM members WHERE username = ?1 AND status != \'pending\'', identifier)
       
       if (!(await verifyPassword(password, member?.password_hash ?? null)) || !member) throw new HttpError('Kullanıcı adı veya şifre hatalı.', 401)
-      if (member.status === 'suspended') throw new HttpError('Hesabınız Askıya Alınmıştır. Lütfen Web Site sahibi ile iletişime geçin.', 403)
+      if (member.is_suspended === 1 || member.status === 'suspended') throw new HttpError('Hesabınız Askıya Alınmıştır. Lütfen Web Site sahibi ile iletişime geçin.', 403)
 
       const info = getRoleInfo(member.role, member.is_admin)
       if (info.level < 4 && (await isMaintenanceOn())) throw new HttpError('Site bakımda. Şu an yalnızca yönetici giriş yapabilir.', 503)
@@ -848,7 +869,7 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError('Geçerli bir e-posta gir.')
       const password = validatePassword(body.password)
       await run(
-        'INSERT INTO members (id, username, email, status, is_admin, role, password_hash, created_at) VALUES (?1, \'admin\', ?2, \'active\', 1, \'Kurucu\', ?3, ?4)',
+        'INSERT INTO members (id, username, email, status, is_admin, role, password_hash, created_at, is_suspended) VALUES (?1, \'admin\', ?2, \'active\', 1, \'Kurucu\', ?3, ?4, 0)',
         crypto.randomUUID(), email, await hashPassword(password), new Date().toISOString(),
       )
       return json({ ok: true })
@@ -877,7 +898,7 @@ async function handle(request: Request, action: string) {
   } catch (error) {
     if (error instanceof HttpError) return json({ error: error.message }, error.status)
     console.error(error)
-    return json({ error: 'Sunucu hatası. Lütfen tekrar dene.' }, 500)
+    return json({ error: error instanceof Error ? error.message : 'Sunucu hatası. Lütfen tekrar dene.' }, 500)
   }
 }
 
