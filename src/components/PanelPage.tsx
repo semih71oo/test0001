@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import {
   ArrowLeft,
   ArrowUpRight,
+  Ban,
   Check,
   CheckCheck,
   ChevronDown,
@@ -16,10 +17,13 @@ import {
   LogOut,
   Pencil,
   Plus,
+  Search,
   ShieldAlert,
   ShieldCheck,
   Sparkles,
   Trash2,
+  UserCheck,
+  UserX,
   Users,
   Wrench,
   X,
@@ -467,13 +471,32 @@ type IssuedCode = { code: string; expiresAt: string; username?: string }
 function MemberManager({ members, refresh, session }: { members: Member[]; refresh: () => Promise<void>; session: Session }) {
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
+  const [search, setSearch] = useState('')
   const [issued, setIssued] = useState<IssuedCode | null>(null)
   const [reissuing, setReissuing] = useState<string | null>(null)
+  const [deletingMember, setDeletingMember] = useState<Member | null>(null)
+  const [countdown, setCountdown] = useState(5)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [copyStatus, setCopyStatus] = useState('')
 
   const isFounder = session?.profile.role === 'Kurucu'
+
+  // 5 saniyelik geri sayım sayacı
+  useEffect(() => {
+    if (!deletingMember) return
+    setCountdown(5)
+    const timer = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(timer)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [deletingMember])
 
   async function invite(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -507,11 +530,36 @@ function MemberManager({ members, refresh, session }: { members: Member[]; refre
     finally { setBusy(false) }
   }
 
+  async function toggleSuspend(member: Member) {
+    setBusy(true); setError(''); setCopyStatus('')
+    const newStatus = member.status === 'suspended' ? 'active' : 'suspended'
+    try {
+      await communityApi('set-member-status', { id: member.id, status: newStatus })
+      await refresh()
+    } catch (caught) { setError(caught instanceof Error ? caught.message : 'İşlem yapılamadı.') }
+    finally { setBusy(false) }
+  }
+
+  async function deleteMember(member: Member) {
+    setBusy(true); setError(''); setCopyStatus('')
+    try {
+      await communityApi('delete-member', { id: member.id })
+      setDeletingMember(null)
+      await refresh()
+    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Hesap silinemedi.') }
+    finally { setBusy(false) }
+  }
+
   async function copyCode() {
     if (!issued) return
     try { await navigator.clipboard.writeText(issued.code); setCopyStatus('Aktivasyon kodu kopyalandı.') }
     catch { setCopyStatus('Kopyalama yapılamadı. Kodu seçerek kopyalayabilirsin.') }
   }
+
+  const q = search.trim().toLowerCase()
+  const filteredMembers = q
+    ? members.filter(m => m.username.toLowerCase().includes(q) || m.email.toLowerCase().includes(q))
+    : members
 
   return (
     <>
@@ -578,85 +626,166 @@ function MemberManager({ members, refresh, session }: { members: Member[]; refre
       <section className="panel-card members-card">
         <div className="list-heading">
           <h2>Kullanıcı hesapları</h2>
-          <span>{members.length} hesap</span>
+          <span>{filteredMembers.length} / {members.length} hesap</span>
         </div>
-        <p className="card-description">E-postalar herkese açık panoda gösterilmez. Aktif hesapların şifrelerine erişilemez.</p>
+        <p className="card-description" style={{ marginBottom: 16 }}>E-postalar herkese açık panoda gösterilmez. Aktif hesapların şifrelerine erişilemez.</p>
+
+        {/* Arama Kutusu */}
+        <div className="members-search">
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Kullanıcı adı veya e-posta ile ara…"
+          />
+        </div>
+
         <div className="members-table-wrap">
           <table className="members-table">
-            <caption className="sr-only">Kullanıcı adları, e-posta adresleri ve aktivasyon durumları</caption>
+            <caption className="sr-only">Kullanıcı adları, e-posta adresleri, rolleri ve aktivasyon durumları</caption>
             <thead>
               <tr>
                 <th scope="col">Kullanıcı adı</th>
                 <th scope="col">E-posta</th>
                 <th scope="col">Rol</th>
                 <th scope="col">Durum</th>
-                <th scope="col">Aktivasyon</th>
+                <th scope="col">İşlemler</th>
               </tr>
             </thead>
             <tbody>
-              {members.map(member => {
-                const isSelf = member.id === session?.profile.id
-                const isTargetAdminOrFounder = member.role === 'Admin' || member.role === 'Kurucu'
-                const cannotChange = busy || isSelf || (!isFounder && isTargetAdminOrFounder)
+              {!filteredMembers.length ? (
+                <tr>
+                  <td colSpan={5} style={{ textAlign: 'center', padding: '30px 0', opacity: 0.7 }}>
+                    Eşleşen kullanıcı bulunamadı.
+                  </td>
+                </tr>
+              ) : (
+                filteredMembers.map(member => {
+                  const isSelf = member.id === session?.profile.id
+                  const isTargetAdminOrFounder = member.role === 'Admin' || member.role === 'Kurucu'
+                  const cannotChange = busy || isSelf || (!isFounder && isTargetAdminOrFounder)
 
-                return (
-                  <tr key={member.id}>
-                    <td><strong>{member.username}</strong></td>
-                    <td>{member.email}</td>
-                    <td>
-                      <select
-                        value={member.role}
-                        onChange={e => changeRole(member, e.target.value)}
-                        disabled={cannotChange}
-                        title={isSelf ? 'Kendi rolünüzü değiştiremezsiniz' : cannotChange ? 'Bu rolü değiştirme yetkiniz yok' : undefined}
-                        style={{
-                          padding: '5px 8px',
-                          borderRadius: 6,
-                          border: '1px solid var(--line)',
-                          background: cannotChange ? '#f0f3e8' : '#fafbf6',
-                          fontSize: '11px',
-                          fontWeight: 500,
-                          cursor: cannotChange ? 'not-allowed' : 'pointer',
-                          color: 'var(--ink)',
-                        }}
-                      >
-                        {accountRoles.map(r => (
-                          <option
-                            key={r}
-                            value={r}
-                            disabled={!isFounder && (r === 'Kurucu' || r === 'Admin')}
-                          >
-                            {r}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td>
-                      <span className={`account-state ${member.status}`}>
-                        {member.status === 'active' ? <Check size={12} /> : <KeyRound size={12} />}
-                        {member.status === 'active' ? 'Aktif' : 'Kod bekliyor'}
-                      </span>
-                    </td>
-                    <td>
-                      {member.status === 'active' ? (
-                        <span className="table-muted">Tamamlandı</span>
-                      ) : reissuing === member.id ? (
-                        <div className="reissue-confirm">
-                          <span>Eski kod geçersiz olacak.</span>
-                          <button type="button" className="text-action" disabled={busy} onClick={() => reissue(member)}>Yeni kod oluştur</button>
-                          <button type="button" className="icon-button" aria-label="Kod yenilemeyi iptal et" disabled={busy} onClick={() => setReissuing(null)}><X size={15} /></button>
+                  return (
+                    <tr key={member.id}>
+                      <td><strong>{member.username}</strong></td>
+                      <td>{member.email}</td>
+                      <td>
+                        <select
+                          value={member.role}
+                          onChange={e => changeRole(member, e.target.value)}
+                          disabled={cannotChange}
+                          title={isSelf ? 'Kendi rolünüzü değiştiremezsiniz' : cannotChange ? 'Bu rolü değiştirme yetkiniz yok' : undefined}
+                          style={{
+                            padding: '5px 8px',
+                            borderRadius: 6,
+                            border: '1px solid var(--line)',
+                            background: cannotChange ? '#f0f3e8' : '#fafbf6',
+                            fontSize: '11px',
+                            fontWeight: 500,
+                            cursor: cannotChange ? 'not-allowed' : 'pointer',
+                            color: 'var(--ink)',
+                          }}
+                        >
+                          {accountRoles.map(r => (
+                            <option
+                              key={r}
+                              value={r}
+                              disabled={!isFounder && (r === 'Kurucu' || r === 'Admin')}
+                            >
+                              {r}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>
+                        <span className={`account-state ${member.status}`}>
+                          {member.status === 'active' ? (
+                            <><Check size={12} />Aktif</>
+                          ) : member.status === 'suspended' ? (
+                            <><Ban size={12} />Askıya Alındı</>
+                          ) : (
+                            <><KeyRound size={12} />Kod bekliyor</>
+                          )}
+                        </span>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {member.status === 'pending' ? (
+                            reissuing === member.id ? (
+                              <div className="reissue-confirm">
+                                <span>Eski kod geçersiz olacak.</span>
+                                <button type="button" className="text-action" disabled={busy} onClick={() => reissue(member)}>Yeni kod oluştur</button>
+                                <button type="button" className="icon-button" aria-label="Kod yenilemeyi iptal et" disabled={busy} onClick={() => setReissuing(null)}><X size={15} /></button>
+                              </div>
+                            ) : (
+                              <button type="button" className="text-action" disabled={busy} onClick={() => setReissuing(member.id)}>Kodu yenile <KeyRound size={14} /></button>
+                            )
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                className="icon-button"
+                                title={member.status === 'suspended' ? 'Hesap askısını kaldır' : 'Hesabı askıya al'}
+                                aria-label={member.status === 'suspended' ? 'Hesap askısını kaldır' : 'Hesabı askıya al'}
+                                disabled={cannotChange}
+                                onClick={() => toggleSuspend(member)}
+                                style={{ color: member.status === 'suspended' ? '#5a7d44' : undefined }}
+                              >
+                                {member.status === 'suspended' ? <UserCheck size={15} /> : <UserX size={15} />}
+                              </button>
+                              <button
+                                type="button"
+                                className="icon-button"
+                                title="Hesabı tamamen sil"
+                                aria-label="Hesabı tamamen sil"
+                                disabled={cannotChange}
+                                onClick={() => setDeletingMember(member)}
+                                style={{ color: '#974d34' }}
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </>
+                          )}
                         </div>
-                      ) : (
-                        <button type="button" className="text-action" disabled={busy} onClick={() => setReissuing(member.id)}>Kodu yenile <KeyRound size={14} /></button>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
             </tbody>
           </table>
         </div>
       </section>
+
+      {/* 5 Saniyelik Silme Onay Penceresi (Modal) */}
+      {deletingMember && (
+        <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-del-title">
+          <div className="modal-content">
+            <h3 id="modal-del-title">Hesap Silinsin mi?</h3>
+            <p>
+              Kullanıcı adı <strong>{deletingMember.username}</strong> olan elemanı silmek istiyor musun? Bu işlem geri alınamaz; kullanıcıya ait oturumlar, yorumlar ve beğeniler tamamen silinecektir.
+            </p>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="modal-btn-cancel"
+                disabled={busy}
+                onClick={() => setDeletingMember(null)}
+              >
+                Vazgeç
+              </button>
+              <button
+                type="button"
+                className="modal-btn-danger"
+                disabled={countdown > 0 || busy}
+                onClick={() => deleteMember(deletingMember)}
+              >
+                {busy ? 'Siliniyor…' : countdown > 0 ? `Evet, sil (${countdown})` : 'Evet, sil'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }
@@ -907,4 +1036,4 @@ function UpdateManager() {
       </section>
     </div>
   )
-      }
+    }
