@@ -474,15 +474,17 @@ function MemberManager({ members, refresh, session }: { members: Member[]; refre
   const [search, setSearch] = useState('')
   const [issued, setIssued] = useState<IssuedCode | null>(null)
   const [reissuing, setReissuing] = useState<string | null>(null)
+  const [suspendingMember, setSuspendingMember] = useState<Member | null>(null)
   const [deletingMember, setDeletingMember] = useState<Member | null>(null)
   const [countdown, setCountdown] = useState(5)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
   const [copyStatus, setCopyStatus] = useState('')
 
   const isFounder = session?.profile.role === 'Kurucu'
 
-  // 5 saniyelik geri sayım sayacı
+  // 5 saniyelik silme geri sayım sayacı
   useEffect(() => {
     if (!deletingMember) return
     setCountdown(5)
@@ -500,51 +502,61 @@ function MemberManager({ members, refresh, session }: { members: Member[]; refre
 
   async function invite(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setBusy(true); setError(''); setCopyStatus(''); setIssued(null)
+    setBusy(true); setError(''); setNotice(''); setCopyStatus(''); setIssued(null)
     try {
       const result = await communityApi<IssuedCode>('invite', { username, email })
       setIssued(result)
       setUsername(''); setEmail('')
+      setNotice('Aktivasyon kodu başarıyla oluşturuldu.')
       await refresh()
     } catch (caught) { setError(caught instanceof Error ? caught.message : 'Kod oluşturulamadı.') }
     finally { setBusy(false) }
   }
 
   async function reissue(member: Member) {
-    setBusy(true); setError(''); setCopyStatus(''); setIssued(null)
+    setBusy(true); setError(''); setNotice(''); setCopyStatus(''); setIssued(null)
     try {
       const result = await communityApi<IssuedCode>('reissue', { id: member.id })
       setIssued({ ...result, username: member.username })
       setReissuing(null)
+      setNotice(`"${member.username}" için yeni kod oluşturuldu.`)
       await refresh()
     } catch (caught) { setError(caught instanceof Error ? caught.message : 'Kod yenilenemedi.') }
     finally { setBusy(false) }
   }
 
   async function changeRole(member: Member, newRole: string) {
-    setBusy(true); setError(''); setCopyStatus('')
+    setBusy(true); setError(''); setNotice(''); setCopyStatus('')
     try {
       await communityApi('set-role', { id: member.id, role: newRole })
+      setNotice(`"${member.username}" hesabının rolü "${newRole}" olarak güncellendi.`)
       await refresh()
     } catch (caught) { setError(caught instanceof Error ? caught.message : 'Rol güncellenemedi.') }
     finally { setBusy(false) }
   }
 
-  async function toggleSuspend(member: Member) {
-    setBusy(true); setError(''); setCopyStatus('')
-    const newStatus = member.status === 'suspended' ? 'active' : 'suspended'
+  async function confirmSuspend(member: Member) {
+    setBusy(true); setError(''); setNotice(''); setCopyStatus('')
+    const nextStatus = member.status === 'suspended' ? 'active' : 'suspended'
     try {
-      await communityApi('set-member-status', { id: member.id, status: newStatus })
+      await communityApi('set-member-status', { id: member.id, status: nextStatus })
+      setSuspendingMember(null)
+      setNotice(
+        nextStatus === 'suspended'
+          ? `"${member.username}" hesabı başarıyla askıya alındı. Kullanıcının oturumu kapatıldı ve girişi engellendi.`
+          : `"${member.username}" hesabının askısı başarıyla kaldırıldı. Kullanıcı tekrar giriş yapabilir.`
+      )
       await refresh()
     } catch (caught) { setError(caught instanceof Error ? caught.message : 'İşlem yapılamadı.') }
     finally { setBusy(false) }
   }
 
-  async function deleteMember(member: Member) {
-    setBusy(true); setError(''); setCopyStatus('')
+  async function deleteAccount(member: Member) {
+    setBusy(true); setError(''); setNotice(''); setCopyStatus('')
     try {
       await communityApi('delete-member', { id: member.id })
       setDeletingMember(null)
+      setNotice(`"${member.username}" hesabı ve varsa davet kodları başarıyla silindi.`)
       await refresh()
     } catch (caught) { setError(caught instanceof Error ? caught.message : 'Hesap silinemedi.') }
     finally { setBusy(false) }
@@ -579,7 +591,7 @@ function MemberManager({ members, refresh, session }: { members: Member[]; refre
                 <label htmlFor="invite-email">E-posta adresi</label>
                 <input id="invite-email" type="email" value={email} onChange={event => setEmail(event.target.value)} required maxLength={254} autoComplete="off" placeholder="Kullanıcının e-posta adresi" />
               </div>
-              <Feedback error={error} />
+              <Feedback error={error} notice={notice} />
               <button className="button button-primary form-submit" type="submit">
                 {busy ? 'İşlem yapılıyor…' : 'Tek kullanımlık kod oluştur'}
                 <Plus size={17} />
@@ -630,7 +642,15 @@ function MemberManager({ members, refresh, session }: { members: Member[]; refre
         </div>
         <p className="card-description" style={{ marginBottom: 16 }}>E-postalar herkese açık panoda gösterilmez. Aktif hesapların şifrelerine erişilemez.</p>
 
-        {/* Arama Kutusu */}
+        {/* Tablo Üstü Bilgilendirme / Hata Bildirimleri */}
+        {(error || notice) && (
+          <div className="form-feedback" aria-live="polite" style={{ marginBottom: 16 }}>
+            {error && <p className="message message-error" role="alert">{error}</p>}
+            {notice && <p className="message message-success" role="status">{notice}</p>}
+          </div>
+        )}
+
+        {/* Arama Çubuğu */}
         <div className="members-search">
           <input
             type="text"
@@ -709,16 +729,29 @@ function MemberManager({ members, refresh, session }: { members: Member[]; refre
                         </span>
                       </td>
                       <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           {member.status === 'pending' ? (
                             reissuing === member.id ? (
                               <div className="reissue-confirm">
                                 <span>Eski kod geçersiz olacak.</span>
                                 <button type="button" className="text-action" disabled={busy} onClick={() => reissue(member)}>Yeni kod oluştur</button>
-                                <button type="button" className="icon-button" aria-label="Kod yenilemeyi iptal et" disabled={busy} onClick={() => setReissuing(null)}><X size={15} /></button>
+                                <button type="button" className="icon-button" aria-label="İptal" disabled={busy} onClick={() => setReissuing(null)}><X size={15} /></button>
                               </div>
                             ) : (
-                              <button type="button" className="text-action" disabled={busy} onClick={() => setReissuing(member.id)}>Kodu yenile <KeyRound size={14} /></button>
+                              <>
+                                <button type="button" className="text-action" disabled={busy} onClick={() => setReissuing(member.id)}>Kodu yenile <KeyRound size={14} /></button>
+                                <button
+                                  type="button"
+                                  className="icon-button"
+                                  title="Bekleyen daveti ve hesabı sil"
+                                  aria-label="Bekleyen daveti ve hesabı sil"
+                                  disabled={cannotChange}
+                                  onClick={() => setDeletingMember(member)}
+                                  style={{ color: '#974d34' }}
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              </>
                             )
                           ) : (
                             <>
@@ -728,8 +761,8 @@ function MemberManager({ members, refresh, session }: { members: Member[]; refre
                                 title={member.status === 'suspended' ? 'Hesap askısını kaldır' : 'Hesabı askıya al'}
                                 aria-label={member.status === 'suspended' ? 'Hesap askısını kaldır' : 'Hesabı askıya al'}
                                 disabled={cannotChange}
-                                onClick={() => toggleSuspend(member)}
-                                style={{ color: member.status === 'suspended' ? '#5a7d44' : undefined }}
+                                onClick={() => setSuspendingMember(member)}
+                                style={{ color: member.status === 'suspended' ? '#5a7d44' : '#974d34' }}
                               >
                                 {member.status === 'suspended' ? <UserCheck size={15} /> : <UserX size={15} />}
                               </button>
@@ -757,13 +790,54 @@ function MemberManager({ members, refresh, session }: { members: Member[]; refre
         </div>
       </section>
 
+      {/* Askıya Alma / Askı Kaldırma Onay Penceresi (Modal) */}
+      {suspendingMember && (
+        <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-suspend-title">
+          <div className="modal-content">
+            <h3 id="modal-suspend-title">
+              {suspendingMember.status === 'suspended' ? 'Hesap Askısı Kaldırılsın mı?' : 'Hesap Askıya Alınsın mı?'}
+            </h3>
+            <p>
+              {suspendingMember.status === 'suspended' ? (
+                <>
+                  Kullanıcı adı <strong>{suspendingMember.username}</strong> olan hesabın askısını kaldırmak istediğinize emin misiniz? Kullanıcı siteye tekrar sorunsuz giriş yapabilecektir.
+                </>
+              ) : (
+                <>
+                  Kullanıcı adı <strong>{suspendingMember.username}</strong> olan hesabı askıya almak istediğinize emin misiniz? Kullanıcının tüm açık oturumları anında sonlandırılacak ve siteye girişi engellenecektir.
+                </>
+              )}
+            </p>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="modal-btn-cancel"
+                disabled={busy}
+                onClick={() => setSuspendingMember(null)}
+              >
+                Vazgeç
+              </button>
+              <button
+                type="button"
+                className={suspendingMember.status === 'suspended' ? 'button button-primary' : 'modal-btn-danger'}
+                style={{ padding: '10px 16px', fontSize: '12px' }}
+                disabled={busy}
+                onClick={() => confirmSuspend(suspendingMember)}
+              >
+                {busy ? 'İşleniyor…' : suspendingMember.status === 'suspended' ? 'Evet, askıyı kaldır' : 'Evet, hesabı askıya al'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 5 Saniyelik Silme Onay Penceresi (Modal) */}
       {deletingMember && (
         <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-del-title">
           <div className="modal-content">
             <h3 id="modal-del-title">Hesap Silinsin mi?</h3>
             <p>
-              Kullanıcı adı <strong>{deletingMember.username}</strong> olan elemanı silmek istiyor musun? Bu işlem geri alınamaz; kullanıcıya ait oturumlar, yorumlar ve beğeniler tamamen silinecektir.
+              Kullanıcı adı <strong>{deletingMember.username}</strong> olan {deletingMember.status === 'pending' ? 'bekleyen daveti ve hesabı' : 'kullanıcıyı'} silmek istiyor musun? Bu işlem geri alınamaz; kullanıcıya ait tüm oturumlar, varsa yorumlar, beğeniler ve davet kodları kalıcı olarak silinecektir.
             </p>
             <div className="modal-actions">
               <button
@@ -778,7 +852,7 @@ function MemberManager({ members, refresh, session }: { members: Member[]; refre
                 type="button"
                 className="modal-btn-danger"
                 disabled={countdown > 0 || busy}
-                onClick={() => deleteMember(deletingMember)}
+                onClick={() => deleteAccount(deletingMember)}
               >
                 {busy ? 'Siliniyor…' : countdown > 0 ? `Evet, sil (${countdown})` : 'Evet, sil'}
               </button>
@@ -1036,4 +1110,4 @@ function UpdateManager() {
       </section>
     </div>
   )
-    }
+                }
