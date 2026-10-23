@@ -1,0 +1,26 @@
+{
+  "name": "Semih Algan — Yazılım & Fikirler",
+  "short_name": "Semih Algan",
+  "description": "Semih Algan’ın kişisel yazılım vitrini ve çalışma alanı.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fafbf6",
+  "theme_color": "#255b43",
+  "icons": [
+    {
+      "src": "/favicon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon.png",
+      "sizes": "256x256",
+      "type": "image/png"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+}
