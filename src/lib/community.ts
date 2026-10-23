@@ -6,7 +6,7 @@ export type Developer = { id: string; name: string; role: DeveloperRole }
 export const accountRoles = ['Üye', 'Özel Üye', 'Moderatör', 'Baş Moderatör', 'Admin', 'Kurucu'] as const
 export type AccountRole = typeof accountRoles[number]
 
-export type Member = { id: string; username: string; email: string; status: 'pending' | 'active'; createdAt: string; role: AccountRole }
+export type Member = { id: string; username: string; email: string; status: 'pending' | 'active' | 'suspended'; createdAt: string; role: AccountRole }
 export type Session = { profile: Member; isAdmin: boolean; isMod: boolean }
 
 export class ApiError extends Error {
