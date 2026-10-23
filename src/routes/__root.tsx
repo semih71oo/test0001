@@ -23,6 +23,7 @@ const personSchema = {
 export const Route = createRootRoute({
   head: () => ({
     links: [
+      { rel: 'manifest', href: '/manifest.json' },
       { rel: 'icon', type: 'image/x-icon', sizes: '16x16 32x32 48x48', href: '/favicon.ico' },
       { rel: 'icon', type: 'image/png', sizes: '48x48', href: '/favicon-48x48.png' },
       { rel: 'icon', type: 'image/png', sizes: '192x192', href: '/favicon-192x192.png' },
@@ -40,6 +41,10 @@ export const Route = createRootRoute({
       {
         name: 'viewport',
         content: 'width=device-width, initial-scale=1',
+      },
+      {
+        name: 'theme-color',
+        content: '#255b43',
       },
       {
         title: siteName,
@@ -97,6 +102,17 @@ export const Route = createRootRoute({
       {
         type: 'application/ld+json',
         children: JSON.stringify(personSchema),
+      },
+      {
+        children: `
+          if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+              navigator.serviceWorker.register('/sw.js').catch(function(err) {
+                console.log('Service Worker kayıt hatası: ', err);
+              });
+            });
+          }
+        `,
       },
     ],
   }),
