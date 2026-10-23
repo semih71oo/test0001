@@ -1,4 +1,3 @@
---- START OF FILE src/routes/api/community/$action.ts ---
 import { createFileRoute } from '@tanstack/react-router'
 import { env } from 'cloudflare:workers'
 
@@ -834,4 +833,3 @@ export const Route = createFileRoute('/api/community/$action')({
     },
   },
 })
---- END OF FILE src/routes/api/community/$action.ts ---
