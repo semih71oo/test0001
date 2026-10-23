@@ -1,11 +1,17 @@
 {
+  "id": "/",
   "name": "Semih Algan — Yazılım & Fikirler",
   "short_name": "Semih Algan",
   "description": "Semih Algan’ın kişisel yazılım vitrini ve çalışma alanı.",
+  "lang": "tr",
+  "dir": "ltr",
   "start_url": "/",
   "display": "standalone",
+  "orientation": "any",
   "background_color": "#fafbf6",
   "theme_color": "#255b43",
+  "categories": ["developer", "productivity", "utilities"],
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/favicon-192x192.png",
@@ -21,6 +27,33 @@
       "src": "/apple-touch-icon.png",
       "sizes": "180x180",
       "type": "image/png"
+    },
+    {
+      "src": "/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/og-image.png",
+      "sizes": "1200x630",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Semih Algan Ana Sayfa"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Yazılar",
+      "url": "/yazilar",
+      "description": "Yayınlanan yazıları oku"
+    },
+    {
+      "name": "Güncellemeler",
+      "url": "/guncellemeler",
+      "description": "Site güncellemelerini gör"
     }
   ]
 }
