@@ -1,3 +1,4 @@
+--- START OF FILE src/routes/api/community/$action.ts ---
 import { createFileRoute } from '@tanstack/react-router'
 import { env } from 'cloudflare:workers'
 
@@ -564,8 +565,11 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       if (!existing) throw new HttpError('Yorum bulunamadı.', 404)
 
       const callerLevel = getRoleInfo(s.role, s.is_admin).level
-      if (existing.member_id !== s.id && callerLevel < 4) {
-        throw new HttpError('Yalnızca kendi yorumunuzu düzenleyebilirsiniz.', 403)
+      if (existing.member_id !== s.id) {
+        if (callerLevel < 4) throw new HttpError('Yalnızca kendi yorumunuzu düzenleyebilirsiniz.', 403)
+        const targetMember = await first<{ role: string; is_admin: number }>('SELECT role, is_admin FROM members WHERE id = ?1', existing.member_id)
+        const targetLevel = targetMember ? getRoleInfo(targetMember.role, targetMember.is_admin).level : 0
+        if (targetLevel >= callerLevel) throw new HttpError('Kendi seviyenizdeki veya üstünüzdeki hesapların yorumlarını düzenleyemezsiniz.', 403)
       }
 
       await run('UPDATE comments SET body = ?1, edited_at = ?2 WHERE id = ?3', text, Date.now(), commentId)
@@ -652,9 +656,11 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       if (!existing) throw new HttpError('Yorum bulunamadı.', 404)
 
       const callerLevel = getRoleInfo(s.role, s.is_admin).level
-      // Kullanıcı kendi yorumunu silebilir veya Moderatör (seviye 2+) silebilir
-      if (existing.member_id !== s.id && callerLevel < 2) {
-        throw new HttpError('Bu yorumu silme yetkiniz yok.', 403)
+      if (existing.member_id !== s.id) {
+        if (callerLevel < 2) throw new HttpError('Bu yorumu silme yetkiniz yok.', 403)
+        const targetMember = await first<{ role: string; is_admin: number }>('SELECT role, is_admin FROM members WHERE id = ?1', existing.member_id)
+        const targetLevel = targetMember ? getRoleInfo(targetMember.role, targetMember.is_admin).level : 0
+        if (targetLevel >= callerLevel) throw new HttpError('Kendi seviyenizdeki veya üstünüzdeki hesapların yorumlarını silemezsiniz.', 403)
       }
 
       await run('DELETE FROM comments WHERE id = ?1', commentId)
@@ -678,18 +684,27 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
 
       if (kind === 'comment') {
         const memberId = comment?.member_id ?? String(body.memberId ?? '')
+        if (memberId === s.id) throw new HttpError('Kendinize yasak uygulayamazsınız.')
+        
         const target = await first<{ id: string; role: string; is_admin: number }>('SELECT id, role, is_admin FROM members WHERE id = ?1', memberId)
         if (!target) throw new HttpError('Hesap bulunamadı.', 404)
 
         const targetLevel = getRoleInfo(target.role, target.is_admin).level
         const callerLevel = getRoleInfo(s.role, s.is_admin).level
-        if (targetLevel >= callerLevel && callerLevel < 5) throw new HttpError('Kendi seviyenizdeki veya üstünüzdeki hesapları yasaklayamazsınız.')
+        if (targetLevel >= callerLevel) throw new HttpError('Kendi seviyenizdeki veya üstünüzdeki hesapları yasaklayamazsınız.')
 
         await run('DELETE FROM bans WHERE kind = \'comment\' AND member_id = ?1', target.id)
         await run('INSERT INTO bans (id, kind, member_id, ip_hash, expires_at, reason, created_at) VALUES (?1, \'comment\', ?2, NULL, ?3, ?4, ?5)', id, target.id, expiresAt, reason, Date.now())
       } else {
         if (!comment) throw new HttpError('IP yasağı için bir yorum seçmelisin.')
-        if (comment.ip_hash === (await ipHashOf(request))) throw new HttpError('Kendi bağlantını yasaklayamazsın.')
+        if (comment.ip_hash === (await ipHashOf(request))) throw new HttpError('Kendi bağlantınızı yasaklayamazsınız.')
+        if (comment.member_id === s.id) throw new HttpError('Kendi bağlantınızı yasaklayamazsınız.')
+        
+        const target = await first<{ role: string; is_admin: number }>('SELECT role, is_admin FROM members WHERE id = ?1', comment.member_id)
+        const targetLevel = target ? getRoleInfo(target.role, target.is_admin).level : 0
+        const callerLevel = getRoleInfo(s.role, s.is_admin).level
+        if (targetLevel >= callerLevel) throw new HttpError('Kendi seviyenizdeki veya üstünüzdeki hesapların bağlantısını yasaklayamazsınız.')
+
         await run('DELETE FROM bans WHERE kind = \'ip\' AND ip_hash = ?1', comment.ip_hash)
         await run('INSERT INTO bans (id, kind, member_id, ip_hash, expires_at, reason, created_at) VALUES (?1, \'ip\', NULL, ?2, ?3, ?4, ?5)', id, comment.ip_hash, expiresAt, reason, Date.now())
       }
@@ -819,3 +834,4 @@ export const Route = createFileRoute('/api/community/$action')({
     },
   },
 })
+--- END OF FILE src/routes/api/community/$action.ts ---
