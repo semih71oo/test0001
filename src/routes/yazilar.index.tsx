@@ -7,14 +7,6 @@ import { formatDay, imageUrl } from '../lib/posts'
 import type { PostSummary } from '../lib/posts'
 
 export const Route = createFileRoute('/yazilar/')({
-  loader: async () => {
-    try {
-      const posts = await communityApi<PostSummary[]>('posts?page=1')
-      return { posts, error: null }
-    } catch (error) {
-      return { posts: [], error: 'Yazılar yüklenemedi.' }
-    }
-  },
   component: PostsPage,
   head: () => ({ 
     meta: [
@@ -25,19 +17,33 @@ export const Route = createFileRoute('/yazilar/')({
 })
 
 function PostsPage() {
-  const { posts: initialPosts, error } = Route.useLoaderData()
-  
-  const [posts, setPosts] = useState<PostSummary[]>(initialPosts)
+  const [posts, setPosts] = useState<PostSummary[]>([])
   const [page, setPage] = useState(1)
+  const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
-  const [hasMore, setHasMore] = useState(initialPosts.length === 20) // Limit 20'ydi
+  const [hasMore, setHasMore] = useState(false)
+  const [error, setError] = useState('')
 
-  // SSR sonrası sayfa değiştirilip geri gelindiğinde state'i senkronize tutmak için
   useEffect(() => {
-    setPosts(initialPosts)
-    setPage(1)
-    setHasMore(initialPosts.length === 20)
-  }, [initialPosts])
+    let active = true
+    communityApi<PostSummary[]>('posts?page=1')
+      .then(data => {
+        if (active) {
+          setPosts(data)
+          setHasMore(data.length === 20)
+          setLoading(false)
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setError('Yazılar yüklenemedi. Lütfen bağlantını kontrol et.')
+          setLoading(false)
+        }
+      })
+    return () => {
+      active = false
+    }
+  }, [])
 
   async function loadMore() {
     if (loadingMore || !hasMore) return
@@ -60,8 +66,9 @@ function PostsPage() {
       <span className="section-eyebrow" style={{ display: 'block' }}>YAZILAR</span>
       <h1 style={{ margin: '8px 0 28px' }}>Yazılar<span className="heading-dot">.</span></h1>
       
+      {loading && <p role="status" style={{ opacity: 0.7 }}>Yazılar yükleniyor…</p>}
       {error && <p className="message message-error" role="alert">{error}</p>}
-      {!error && !posts.length && <p>Henüz bir yazı yok.</p>}
+      {!loading && !error && !posts.length && <p style={{ opacity: 0.7 }}>Henüz bir yazı yok.</p>}
       
       <div style={{ display: 'grid', gap: 20 }}>
         {posts.map(post => (
