@@ -14,42 +14,6 @@ const SITE_URL = 'https://semihalgan.com.tr'
 const RESET_TTL_MS = 30 * 60 * 1000
 const RESET_FROM = 'Semih Algan <noreply@mail.semihalgan.com.tr>'
 
-let resetTableReady = false
-async function ensureResetTable() {
-  if (resetTableReady) return
-  await DB().prepare('CREATE TABLE IF NOT EXISTS reset_tokens (token_hash TEXT PRIMARY KEY, member_id TEXT NOT NULL, expires_at INTEGER NOT NULL)').run()
-  resetTableReady = true
-}
-
-let dbMigrated = false
-async function runMigrations() {
-  if (dbMigrated) return
-  try {
-    await DB().prepare("ALTER TABLE members ADD COLUMN role TEXT DEFAULT 'Üye'").run()
-  } catch {}
-  try {
-    await DB().prepare("UPDATE members SET role = 'Kurucu' WHERE is_admin = 1 OR LOWER(role) = 'founder' OR LOWER(role) = 'kurucu'").run()
-  } catch {}
-  try {
-    await DB().prepare('ALTER TABLE comments ADD COLUMN edited_at INTEGER DEFAULT NULL').run()
-  } catch {}
-  try {
-    await DB().prepare('ALTER TABLE members ADD COLUMN is_suspended INTEGER DEFAULT 0').run()
-  } catch {}
-  try {
-    await DB().prepare(`
-      CREATE TABLE IF NOT EXISTS site_updates (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        title TEXT NOT NULL,
-        description TEXT,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL
-      )
-    `).run()
-  } catch {}
-  dbMigrated = true
-}
-
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 
 class HttpError extends Error {
@@ -289,20 +253,16 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
 
       const isSuspended = newStatus === 'suspended' ? 1 : 0
       
-      // is_suspended sütununu güncelle (SQLite kısıtlamasına takılmaz)
       await run('UPDATE members SET is_suspended = ?1 WHERE id = ?2', isSuspended, targetId)
 
-      // status sütununu da güncellemeyi dene (eğer check constraint yoksa)
       try {
         await run('UPDATE members SET status = ?1 WHERE id = ?2', newStatus, targetId)
       } catch {
-        // Eğer status sütununda CHECK kuralı varsa status'ü active bırak ama is_suspended=1 kalsın
         if (newStatus === 'suspended') {
           await run("UPDATE members SET status = 'active' WHERE id = ?1", targetId)
         }
       }
 
-      // Askıya alındıysa açık olan tüm oturumlarını anında sonlandır
       if (isSuspended === 1) {
         await run('DELETE FROM sessions WHERE member_id = ?1', targetId)
       }
@@ -439,7 +399,6 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
     run: async (request, body) => {
       if (await isMaintenanceOn()) throw new HttpError('Site bakımda. Şu an şifre sıfırlama yapılamıyor.', 503)
       await rateLimit(request, 'recover', 5, 15 * 60)
-      await ensureResetTable()
       const identifier = String(body.username ?? '').trim().toLowerCase()
       const founder = !!body.founder
       const member = founder
@@ -474,7 +433,6 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
     method: 'POST',
     run: async (request, body) => {
       await rateLimit(request, 'reset', 10, 15 * 60)
-      await ensureResetTable()
       const password = validatePassword(body.password)
       const token = String(body.token ?? '')
       if (!token) throw new HttpError('Bağlantı geçersiz veya süresi dolmuş.')
@@ -879,7 +837,6 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
 
 async function handle(request: Request, action: string) {
   try {
-    await runMigrations()
     const entry = Object.hasOwn(actions, action) ? actions[action] : undefined
     if (!entry || entry.method !== request.method) throw new HttpError('Bulunamadı.', 404)
     if (await isIpBanned(await ipHashOf(request))) {
