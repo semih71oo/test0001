@@ -17,7 +17,6 @@ import {
   LogOut,
   Pencil,
   Plus,
-  Search,
   ShieldAlert,
   ShieldCheck,
   Sparkles,
@@ -270,6 +269,15 @@ export function PanelPage({ adminOnly = false }: { adminOnly?: boolean }) {
                     </section>
                     <PasswordSettings />
                   </div>
+                  
+                  {/* Hesabımı Sil Alanı */}
+                  <div style={{ marginTop: 22 }}>
+                    <DeleteAccountSettings 
+                      isFounder={session.profile.role === 'Kurucu'} 
+                      onDeleted={() => window.location.assign('/giris')} 
+                    />
+                  </div>
+
                   <div className="panel-section-title">
                     <h2>Geliştirici panosu</h2>
                     <a className="text-action" href="/#pano">Sitede görüntüle <ArrowUpRight size={16} /></a>
@@ -347,6 +355,64 @@ function PasswordSettings() {
           <button className="button button-primary" type="submit">{busy ? 'Güncelleniyor…' : 'Şifreyi güncelle'}<ArrowUpRight size={16} /></button>
         </fieldset>
       </form>
+    </section>
+  )
+}
+
+function DeleteAccountSettings({ isFounder, onDeleted }: { isFounder: boolean; onDeleted: () => void }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const [password, setPassword] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleDelete(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setBusy(true)
+    setError('')
+    try {
+      await communityApi('delete-my-account', { password })
+      onDeleted()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Hesap silinemedi. Lütfen şifrenizi kontrol edin.')
+      setBusy(false)
+    }
+  }
+
+  if (isFounder) {
+    return (
+      <section className="panel-card" style={{ borderColor: '#f2d5c9', background: '#fffcfb' }}>
+        <span className="panel-card-icon" style={{ background: '#fff2eb', color: '#974d34' }}><Trash2 size={21} /></span>
+        <h2 style={{ color: '#974d34' }}>Hesabımı Sil</h2>
+        <p className="card-description">Kurucu hesapları güvenlik nedeniyle bu alandan doğrudan silinemez. Hesabı silmek için önce yönetim yetkisi devredilmelidir.</p>
+      </section>
+    )
+  }
+
+  return (
+    <section className="panel-card" style={{ borderColor: '#f2d5c9', background: '#fffcfb' }}>
+      <span className="panel-card-icon" style={{ background: '#fff2eb', color: '#974d34' }}><Trash2 size={21} /></span>
+      <h2 style={{ color: '#974d34' }}>Hesabımı Sil</h2>
+      <p className="card-description">Bu işlem kalıcıdır ve geri alınamaz. Hesabınız, tüm yorumlarınız ve beğenileriniz kalıcı olarak silinecektir.</p>
+      <button className="danger-button" type="button" onClick={() => setIsOpen(true)} style={{ marginTop: 16, padding: '10px 16px', fontSize: '11px' }}>
+        Hesabımı kalıcı olarak sil
+      </button>
+
+      {isOpen && (
+        <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-del-acc-title">
+          <div className="modal-content">
+            <h3 id="modal-del-acc-title" style={{ color: '#974d34' }}>Hesabınızı silmek istediğinize emin misiniz?</h3>
+            <p style={{ marginBottom: 16 }}>İşlemi onaylamak için mevcut hesap şifrenizi girmelisiniz. Bu işlem <strong>geri alınamaz</strong>.</p>
+            <form onSubmit={handleDelete} className="account-form compact-form" style={{ marginTop: 0, textAlign: 'left' }}>
+              <PasswordField id="del-acc-pass" label="Mevcut Şifreniz" value={password} onChange={setPassword} minLength={1} />
+              {error && <p className="message message-error" role="alert" style={{ marginTop: 12 }}>{error}</p>}
+              <div className="modal-actions" style={{ marginTop: 24 }}>
+                <button type="button" className="modal-btn-cancel" disabled={busy} onClick={() => { setIsOpen(false); setPassword(''); setError(''); }}>Vazgeç</button>
+                <button type="submit" className="modal-btn-danger" disabled={busy || !password}>{busy ? 'Siliniyor…' : 'Evet, hesabımı sil'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </section>
   )
 }
@@ -644,7 +710,6 @@ function MemberManager({ members, refresh, session }: { members: Member[]; refre
         </div>
         <p className="card-description" style={{ marginBottom: 16 }}>E-postalar herkese açık panoda gösterilmez. Aktif hesapların şifrelerine erişilemez.</p>
 
-        {/* Tablo Üstü Bilgilendirme / Hata Bildirimleri */}
         {(error || notice) && (
           <div className="form-feedback" aria-live="polite" style={{ marginBottom: 16 }}>
             {error && <p className="message message-error" role="alert">{error}</p>}
@@ -652,14 +717,33 @@ function MemberManager({ members, refresh, session }: { members: Member[]; refre
           </div>
         )}
 
-        {/* Arama Çubuğu */}
-        <div className="members-search">
+        {/* Temizleme Butonlu Arama Çubuğu */}
+        <div className="members-search" style={{ position: 'relative' }}>
           <input
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Kullanıcı adı veya e-posta ile ara…"
+            style={{ paddingRight: search ? '36px' : '14px' }}
           />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              className="icon-button"
+              style={{
+                position: 'absolute',
+                right: '5px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                border: 'none',
+                background: 'transparent',
+              }}
+              aria-label="Aramayı temizle"
+            >
+              <X size={16} />
+            </button>
+          )}
         </div>
 
         <div className="members-table-wrap">
@@ -1112,4 +1196,4 @@ function UpdateManager() {
       </section>
     </div>
   )
-                }
+        }
