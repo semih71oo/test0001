@@ -1,4 +1,14 @@
-export type PostSummary = { id: string; title: string; excerpt: string; createdAt: number; updatedAt: number; hasImage: boolean; likes: number; comments: number }
+export type PostSummary = { 
+  id: string; 
+  title: string; 
+  excerpt: string; 
+  authorName?: string; 
+  createdAt: number; 
+  updatedAt: number; 
+  hasImage: boolean; 
+  likes: number; 
+  comments: number 
+}
 
 export type PostComment = {
   id: string
@@ -14,6 +24,7 @@ export type PostDetail = {
   id: string
   title: string
   body: string
+  authorName?: string
   createdAt: number
   updatedAt: number
   hasImage: boolean
