@@ -1,4 +1,4 @@
-import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router'
+import { HeadContent, Scripts, createRootRoute, useRouterState } from '@tanstack/react-router'
 import { MaintenanceGate } from '../components/MaintenanceGate'
 import { CookieBanner } from '../components/CookieBanner'
 import { NotFoundPage } from '../components/NotFoundPage'
@@ -18,6 +18,17 @@ const personSchema = {
   birthDate: '2011-05-26',
   jobTitle: 'Yazılım Geliştirici',
   sameAs: ['https://semihalgan.com.tr'],
+}
+
+// TanStack Router sayfa geçişlerinde tetiklenen şık yükleme çubuğu
+function RouterLoadingBar() {
+  const isLoading = useRouterState({ select: s => s.status === 'pending' })
+  if (!isLoading) return null
+  return (
+    <div className="router-spinner" aria-hidden="true">
+      <div className="router-spinner-bar" />
+    </div>
+  )
 }
 
 export const Route = createRootRoute({
@@ -128,6 +139,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body>
+        <RouterLoadingBar />
         <MaintenanceGate />
         <CookieBanner />
         {children}
