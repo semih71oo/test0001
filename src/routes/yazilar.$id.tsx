@@ -8,8 +8,25 @@ import { formatDate, imageUrl } from '../lib/posts'
 import type { PostDetail } from '../lib/posts'
 
 export const Route = createFileRoute('/yazilar/$id')({
+  loader: async ({ params }) => {
+    try {
+      const post = await communityApi<PostDetail>(`post?id=${encodeURIComponent(params.id)}`)
+      return { post, error: null }
+    } catch (caught) {
+      const status = caught instanceof ApiError ? caught.status : 500
+      return { post: null, error: status === 404 ? 'missing' : 'error' }
+    }
+  },
+  head: ({ loaderData }) => {
+    if (!loaderData?.post) return { meta: [{ title: 'Yazı Bulunamadı — Semih Algan' }] }
+    return {
+      meta: [
+        { title: `${loaderData.post.title} — Semih Algan` },
+        { name: 'description', content: loaderData.post.body.substring(0, 160) }
+      ]
+    }
+  },
   component: PostPage,
-  head: () => ({ meta: [{ title: 'Yazı — Semih Algan' }] }),
 })
 
 function AccountRoleBadge({ role }: { role: string }) {
@@ -27,53 +44,60 @@ function AccountRoleBadge({ role }: { role: string }) {
 }
 
 function PostPage() {
-  const { id } = Route.useParams()
-  const [post, setPost] = useState<PostDetail | null>(null)
-  const [status, setStatus] = useState<'loading' | 'ready' | 'missing' | 'error'>('loading')
+  const { post: initialPost, error: loaderError } = Route.useLoaderData()
+  
+  const [post, setPost] = useState<PostDetail | null>(initialPost)
   const [comment, setComment] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
-  // Yorum düzenleme ve silme durumları
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingText, setEditingText] = useState('')
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [actionBusy, setActionBusy] = useState(false)
 
-  async function load() {
-    try {
-      setPost(await communityApi<PostDetail>(`post?id=${encodeURIComponent(id)}`))
-      setStatus('ready')
-    } catch (caught) {
-      setStatus(caught instanceof ApiError && caught.status === 404 ? 'missing' : 'error')
-    }
+  // Router verisi değiştiğinde state'i güncelle
+  useEffect(() => {
+    setPost(initialPost)
+  }, [initialPost])
+
+  async function reloadPost() {
+    if (!post) return
+    const updatedPost = await communityApi<PostDetail>(`post?id=${encodeURIComponent(post.id)}`)
+    setPost(updatedPost)
   }
 
-  useEffect(() => { void load() }, [id])
-
-  useEffect(() => {
-    if (post?.title) document.title = `${post.title} — Semih Algan`
-  }, [post?.title])
-
+  // OPTIMISTIC UI: Beğen butonuna basıldığı an UI güncellenir, API arkadan çağrılır.
   async function toggleLike() {
     if (!post) return
     setError('')
+    
+    const wasLiked = post.liked
+    const newLikes = wasLiked ? post.likes - 1 : post.likes + 1
+    
+    // Anında Görsel Güncelleme
+    setPost({ ...post, liked: !wasLiked, likes: newLikes })
+    
     try {
       const result = await communityApi<{ liked: boolean; likes: number }>('like', { postId: post.id })
-      setPost({ ...post, liked: result.liked, likes: result.likes })
+      // Sunucudan gelen kesin sonuçla senkronize et
+      setPost(prev => prev ? { ...prev, liked: result.liked, likes: result.likes } : prev)
     } catch (caught) {
+      // Hata olursa işlemi geri al
+      setPost({ ...post, liked: wasLiked, likes: wasLiked ? newLikes + 1 : newLikes - 1 })
       setError(caught instanceof Error ? caught.message : 'Beğeni kaydedilemedi.')
     }
   }
 
   async function sendComment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (!post) return
     setBusy(true)
     setError('')
     try {
-      await communityApi('comment', { postId: id, body: comment })
+      await communityApi('comment', { postId: post.id, body: comment })
       setComment('')
-      await load()
+      await reloadPost()
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Yorum gönderilemedi.')
     } finally {
@@ -101,7 +125,7 @@ function PostPage() {
       await communityApi('edit-comment', { id: commentId, body: editingText })
       setEditingId(null)
       setEditingText('')
-      await load()
+      await reloadPost()
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Yorum güncellenemedi.')
     } finally {
@@ -115,7 +139,7 @@ function PostPage() {
     try {
       await communityApi('delete-comment', { id: commentId })
       setDeletingId(null)
-      await load()
+      await reloadPost()
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Yorum silinemedi.')
     } finally {
@@ -123,17 +147,19 @@ function PostPage() {
     }
   }
 
-  if (status === 'loading') return <PublicShell><p role="status">Yükleniyor…</p></PublicShell>
-  if (status === 'missing') return <PublicShell><h1>Yazı bulunamadı.</h1><p><a href="/yazilar">Tüm yazılara dön</a></p></PublicShell>
-  if (status === 'error' || !post) return <PublicShell><p className="message message-error" role="alert">Yazı şu an yüklenemiyor.</p></PublicShell>
+  if (loaderError === 'missing') return <PublicShell><h1>Yazı bulunamadı.</h1><p><a href="/yazilar">Tüm yazılara dön</a></p></PublicShell>
+  if (loaderError === 'error' || !post) return <PublicShell><p className="message message-error" role="alert">Yazı şu an yüklenemiyor.</p></PublicShell>
 
   const banned = post.viewer?.commentBan
 
   return (
     <PublicShell>
-      <small style={{ display: 'block', opacity: .6 }}>{formatDate(post.createdAt)}</small>
+      <small style={{ display: 'block', opacity: .6 }}>{formatDate(post.createdAt)} {post.authorName ? `· Yazar: ${post.authorName}` : ''}</small>
       <h1 style={{ margin: '6px 0 20px' }}>{post.title}</h1>
-      {post.hasImage && <img src={imageUrl(post.id, post.updatedAt)} alt="" style={{ width: '100%', borderRadius: 16, marginBottom: 22 }} />}
+      
+      {/* Görsel En-Boy düzeltmesi (maxHeight eklendi) */}
+      {post.hasImage && <img src={imageUrl(post.id, post.updatedAt)} alt="" style={{ width: '100%', maxHeight: 500, objectFit: 'cover', borderRadius: 16, marginBottom: 22 }} />}
+      
       <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.7, fontSize: '1.05rem' }}>{post.body}</div>
 
       <div style={{ margin: '28px 0', display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -147,12 +173,21 @@ function PostPage() {
       {error && <p className="message message-error" role="alert">{error}</p>}
 
       {!post.viewer ? (
-        <p>Yorum yapmak için <a href="/giris">giriş yapmalısın</a>. Hesabın yoksa yalnızca beğenebilirsin.</p>
+        <p>Yorum yapmak için <a href="/giris" style={{ color: 'var(--green)', textDecoration: 'underline' }}>giriş yapmalısın</a>. Hesabın yoksa yalnızca beğenebilirsin.</p>
       ) : banned ? (
         <p className="message message-error" role="alert">{banned.until ? `Yorum yapman ${formatDate(banned.until)} tarihine kadar kısıtlandı.` : 'Yorum yapman kalıcı olarak kısıtlandı.'}</p>
       ) : (
         <form onSubmit={sendComment} style={{ display: 'grid', gap: 10, margin: '12px 0 24px' }}>
-          <textarea value={comment} onChange={event => setComment(event.target.value)} required maxLength={1000} rows={3} placeholder={`${post.viewer.username} olarak yorum yaz…`} style={{ width: '100%', borderRadius: 12, padding: 12, font: 'inherit' }} />
+          <textarea 
+            value={comment} 
+            onChange={event => setComment(event.target.value)} 
+            required 
+            maxLength={1000} 
+            rows={3} 
+            disabled={busy}
+            placeholder={`${post.viewer.username} olarak yorum yaz…`} 
+            style={{ width: '100%', borderRadius: 12, padding: 12, font: 'inherit', opacity: busy ? 0.6 : 1, border: '1px solid var(--line)' }} 
+          />
           <button className="button button-primary" type="submit" disabled={busy || !comment.trim()} style={{ justifySelf: 'start', display: 'inline-flex', gap: 8, alignItems: 'center' }}>{busy ? 'Gönderiliyor…' : 'Yorumu gönder'}<Send size={16} /></button>
         </form>
       )}
@@ -161,7 +196,6 @@ function PostPage() {
         <ul style={{ listStyle: 'none', padding: 0, display: 'grid', gap: 14 }}>
           {post.comments.map(item => {
             const isOwner = post.viewer && post.viewer.id === item.memberId
-            // Yorumu yalnızca yazan kişi düzenleyebilir (silmeyi moderatör/admin yapabilir)
             const canEdit = !!isOwner
             const canDelete = isOwner || post.viewer?.isMod || post.viewer?.isAdmin
 
@@ -174,46 +208,20 @@ function PostPage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ opacity: .6 }}>{formatDate(item.createdAt)}</span>
                     {item.editedAt && (
-                      <span
-                        title={`Son düzenleme: ${formatDate(item.editedAt)}`}
-                        style={{
-                          fontSize: '0.78rem',
-                          color: '#557847',
-                          background: '#edf4e4',
-                          border: '1px solid #d0ddc0',
-                          padding: '2px 6px',
-                          borderRadius: 4,
-                          fontStyle: 'italic',
-                        }}
-                      >
+                      <span title={`Son düzenleme: ${formatDate(item.editedAt)}`} style={{ fontSize: '0.78rem', color: '#557847', background: '#edf4e4', border: '1px solid #d0ddc0', padding: '2px 6px', borderRadius: 4, fontStyle: 'italic' }}>
                         (düzenlendi)
                       </span>
                     )}
 
-                    {/* Düzenleme & Silme butonları */}
                     {editingId !== item.id && (
                       <div className="row-actions" style={{ marginLeft: 6 }}>
                         {canEdit && (
-                          <button
-                            type="button"
-                            className="icon-button"
-                            title="Yorumu düzenle"
-                            aria-label="Yorumu düzenle"
-                            disabled={actionBusy}
-                            onClick={() => startEdit(item.id, item.body)}
-                          >
+                          <button type="button" className="icon-button" title="Yorumu düzenle" aria-label="Yorumu düzenle" disabled={actionBusy} onClick={() => startEdit(item.id, item.body)}>
                             <Pencil size={14} />
                           </button>
                         )}
                         {canDelete && (
-                          <button
-                            type="button"
-                            className="icon-button"
-                            title="Yorumu sil"
-                            aria-label="Yorumu sil"
-                            disabled={actionBusy}
-                            onClick={() => setDeletingId(item.id)}
-                          >
+                          <button type="button" className="icon-button" title="Yorumu sil" aria-label="Yorumu sil" disabled={actionBusy} onClick={() => setDeletingId(item.id)}>
                             <Trash2 size={14} />
                           </button>
                         )}
@@ -222,32 +230,18 @@ function PostPage() {
                   </div>
                 </div>
 
-                {/* Silme Onay Kutusu */}
                 {deletingId === item.id && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, padding: 8, background: '#fff2eb', border: '1px solid #eccfc0', borderRadius: 8 }}>
                     <span style={{ fontSize: '0.82rem', color: '#974d34' }}>Bu yorumu silmek istediğine emin misin?</span>
-                    <button
-                      type="button"
-                      className="danger-button"
-                      disabled={actionBusy}
-                      onClick={() => deleteComment(item.id)}
-                    >
+                    <button type="button" className="danger-button" disabled={actionBusy} onClick={() => deleteComment(item.id)}>
                       {actionBusy ? 'Siliniyor…' : 'Evet, sil'}
                     </button>
-                    <button
-                      type="button"
-                      className="icon-button"
-                      title="Vazgeç"
-                      aria-label="Vazgeç"
-                      disabled={actionBusy}
-                      onClick={() => setDeletingId(null)}
-                    >
+                    <button type="button" className="icon-button" title="Vazgeç" aria-label="Vazgeç" disabled={actionBusy} onClick={() => setDeletingId(null)}>
                       <X size={14} />
                     </button>
                   </div>
                 )}
 
-                {/* Yorum Metni veya Düzenleme Formu */}
                 {editingId === item.id ? (
                   <div style={{ marginTop: 10, display: 'grid', gap: 8 }}>
                     <textarea
@@ -255,25 +249,14 @@ function PostPage() {
                       onChange={e => setEditingText(e.target.value)}
                       maxLength={1000}
                       rows={3}
-                      style={{ width: '100%', borderRadius: 8, padding: 10, font: 'inherit', border: '1px solid #dce2d3' }}
+                      disabled={actionBusy}
+                      style={{ width: '100%', borderRadius: 8, padding: 10, font: 'inherit', border: '1px solid #dce2d3', opacity: actionBusy ? 0.6 : 1 }}
                     />
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <button
-                        type="button"
-                        className="button button-primary"
-                        style={{ padding: '8px 14px', fontSize: '0.85rem' }}
-                        disabled={actionBusy || !editingText.trim()}
-                        onClick={() => submitEdit(item.id)}
-                      >
+                      <button type="button" className="button button-primary" style={{ padding: '8px 14px', fontSize: '0.85rem' }} disabled={actionBusy || !editingText.trim()} onClick={() => submitEdit(item.id)}>
                         {actionBusy ? 'Kaydediliyor…' : 'Kaydet'} <Check size={14} />
                       </button>
-                      <button
-                        type="button"
-                        className="button button-outline"
-                        style={{ padding: '8px 14px', fontSize: '0.85rem' }}
-                        disabled={actionBusy}
-                        onClick={cancelEdit}
-                      >
+                      <button type="button" className="button button-outline" style={{ padding: '8px 14px', fontSize: '0.85rem' }} disabled={actionBusy} onClick={cancelEdit}>
                         Vazgeç <X size={14} />
                       </button>
                     </div>
