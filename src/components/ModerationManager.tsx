@@ -24,7 +24,7 @@ function AccountRoleBadge({ role }: { role: string }) {
   return <span className={`acc-role ${cls}`}>{role}</span>
 }
 
-export function ModerationManager({ members }: { members: Member[] }) {
+export function ModerationManager({ members, canIpBan = false }: { members: Member[]; canIpBan?: boolean }) {
   const [session, setSession] = useState<Session | null>(null)
   const [comments, setComments] = useState<ModComment[]>([])
   const [bans, setBans] = useState<BanRow[]>([])
@@ -165,7 +165,7 @@ export function ModerationManager({ members }: { members: Member[] }) {
                   <div style={{ display: 'grid', gap: 8 }}>
                     <select aria-label="Yasak türü" className="custom-select" value={draft.kind} onChange={event => setDraft({ ...draft, kind: event.target.value as 'comment' | 'ip' })}>
                       <option value="comment">Yorum yasağı (hesap)</option>
-                      <option value="ip">IP yasağı (bağlantı)</option>
+                      {canIpBan && <option value="ip">IP yasağı (bağlantı)</option>}
                     </select>
                     <select aria-label="Süre" className="custom-select" value={draft.duration} onChange={event => setDraft({ ...draft, duration: event.target.value })}>
                       {banDurations.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
