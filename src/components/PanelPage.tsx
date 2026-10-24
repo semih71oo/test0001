@@ -284,7 +284,7 @@ export function PanelPage({ adminOnly = false }: { adminOnly?: boolean }) {
           {tab === 'members' && adminOnly && session.isAdmin && <MemberManager members={members} refresh={refresh} session={session} />}
           {tab === 'posts' && adminOnly && session.isAdmin && <PostManager />}
           {tab === 'updates' && adminOnly && session.isAdmin && <UpdateManager />}
-          {tab === 'moderation' && adminOnly && session.isMod && <ModerationManager members={members} />}
+          {tab === 'moderation' && adminOnly && session.isMod && <ModerationManager members={members} canIpBan={session.isAdmin} />}
           {tab === 'maintenance' && adminOnly && session.isAdmin && <MaintenanceManager />}
 
           <footer className="workspace-footer">
@@ -312,6 +312,7 @@ function StatCard({ label, value, icon }: { label: string; value: number; icon: 
 }
 
 function PasswordSettings() {
+  const [currentPassword, setCurrentPassword] = useState('')
   const [password, setPassword] = useState('')
   const [confirmation, setConfirmation] = useState('')
   const [busy, setBusy] = useState(false)
@@ -324,12 +325,12 @@ function PasswordSettings() {
     if (password !== confirmation) { setError('Şifreler eşleşmiyor.'); return }
     setBusy(true)
     try {
-      await communityApi('change-password', { password })
+      await communityApi('change-password', { currentPassword, password })
       setNotice('Şifren güvenle güncellendi.')
-    } catch {
-      setError('Şifre güncellenemedi. Oturumunu ve bağlantını kontrol et.')
+    } catch (caught) {
+      setError(caught instanceof Error && caught.message ? caught.message : 'Şifre güncellenemedi. Oturumunu ve bağlantını kontrol et.')
     } finally {
-      setBusy(false); setPassword(''); setConfirmation('')
+      setBusy(false); setCurrentPassword(''); setPassword(''); setConfirmation('')
     }
   }
   return (
@@ -339,6 +340,7 @@ function PasswordSettings() {
       <p className="card-description">En az 12 karakterlik güçlü bir şifre kullan.</p>
       <form className="account-form compact-form" onSubmit={submit}>
         <fieldset disabled={busy}>
+          <PasswordField id="panel-current-password" label="Mevcut şifre" value={currentPassword} onChange={setCurrentPassword} autoComplete="current-password" minLength={1} />
           <PasswordField id="panel-password" label="Yeni şifre" value={password} onChange={setPassword} />
           <PasswordField id="panel-password-confirm" label="Şifre tekrar" value={confirmation} onChange={setConfirmation} />
           <Feedback error={error} notice={notice} />
