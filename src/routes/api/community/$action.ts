@@ -73,11 +73,10 @@ async function rateLimit(request: Request, bucket: string, max: number, windowSe
 function readCookie(request: Request, name: string) {
   const match = (request.headers.get('Cookie') ?? '').split(/;\s*/).find(p => p.startsWith(`${name}=`))
   if (!match) return null
-  // Bozuk (geçersiz yüzde kodlu) bir çerez 500 hatasına yol açmasın
   try { return decodeURIComponent(match.slice(name.length + 1)) } catch { return null }
 }
 
-type SessionRow = { id: string; username: string; email: string; status: 'pending' | 'active' | 'suspended'; is_admin: number; role: string; created_at: string; is_suspended?: number }
+type SessionRow = { id: string; username: string; email: string; status: 'pending' | 'active' | 'suspended'; is_admin: number; role: string; created_at: number; is_suspended?: number }
 
 function getRoleInfo(role?: string | null, isAdmin?: number): { role: string; level: number } {
   const r = (role ?? '').trim().toLowerCase()
@@ -251,7 +250,6 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
 
       const target = await first<{ role: string; is_admin: number; status: string }>('SELECT role, is_admin, status FROM members WHERE id = ?1', targetId)
       if (!target) throw new HttpError('Kullanıcı bulunamadı.', 404)
-      // Bekleyen (henüz aktive edilmemiş) hesap şifresiz kalıp kilitlenmesin
       if (target.status === 'pending') throw new HttpError('Bekleyen hesabın durumu değiştirilemez. Davet kodunu kullandırın ya da yenileyin.', 400)
 
       const callerLevel = getRoleInfo(s.role, s.is_admin).level
@@ -316,10 +314,9 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       if (!/^[a-z0-9][a-z0-9._-]{2,31}$/.test(username)) throw new HttpError('Kullanıcı adı 3–32 karakter olmalı (a-z, 0-9, nokta, tire, alt çizgi).')
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) throw new HttpError('Geçerli bir e-posta adresi gir.')
       if (await first('SELECT 1 FROM members WHERE username = ?1', username)) throw new HttpError('Bu kullanıcı adı zaten alınmış.', 409)
-      // E-postayla giriş ve şifre sıfırlama doğru hesabı bulsun diye e-posta benzersiz olmalı
       if (await first('SELECT 1 FROM members WHERE email = ?1', email)) throw new HttpError('Bu e-posta adresi başka bir hesapta kayıtlı.', 409)
       const id = crypto.randomUUID()
-      await run('INSERT INTO members (id, username, email, status, is_admin, role, created_at, is_suspended) VALUES (?1, ?2, ?3, \'pending\', 0, \'Üye\', ?4, 0)', id, username, email, new Date().toISOString())
+      await run('INSERT INTO members (id, username, email, status, is_admin, role, created_at, is_suspended) VALUES (?1, ?2, ?3, \'pending\', 0, \'Üye\', ?4, 0)', id, username, email, Date.now())
       return json({ ...(await issueCode(id)), username })
     },
   },
@@ -392,7 +389,6 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
     },
   },
 
-  // Şifre değiştirirken mevcut şifre de doğrulanır (çalınmış bir oturum hesabı kapamasın)
   'change-password': {
     method: 'POST',
     run: async (request, body) => {
@@ -469,7 +465,7 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       if (name.length < 2 || name.length > 80) throw new HttpError('İsim 2–80 karakter olmalı.')
       if (!ROLES.includes(body.role)) throw new HttpError('Geçersiz rol.')
       if (body.id) await run('UPDATE developers SET name = ?1, role = ?2 WHERE id = ?3', name, body.role, String(body.id))
-      else await run('INSERT INTO developers (id, name, role, created_at) VALUES (?1, ?2, ?3, ?4)', crypto.randomUUID(), name, body.role, new Date().toISOString())
+      else await run('INSERT INTO developers (id, name, role, created_at) VALUES (?1, ?2, ?3, ?4)', crypto.randomUUID(), name, body.role, Date.now())
       return json({ ok: true })
     },
   },
@@ -514,16 +510,25 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
 
   posts: {
     method: 'GET',
-    run: async () => {
+    run: async (request) => {
+      const page = Math.max(1, parseInt(queryParam(request, 'page') || '1', 10))
+      const limit = 20
+      const offset = (page - 1) * limit
+
       const rows = await all<any>(
         `SELECT p.id, p.title, substr(p.body, 1, 200) AS excerpt, p.created_at, p.updated_at,
+                m.username AS author_name,
                 EXISTS(SELECT 1 FROM post_images i WHERE i.post_id = p.id) AS has_image,
                 (SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id) AS likes,
                 (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comments
-           FROM posts p ORDER BY p.created_at DESC LIMIT 50`,
+           FROM posts p 
+           LEFT JOIN members m ON m.id = p.member_id
+           ORDER BY p.created_at DESC 
+           LIMIT ?1 OFFSET ?2`,
+        limit, offset
       )
       return json(
-        rows.map(r => ({ id: r.id, title: r.title, excerpt: r.excerpt, createdAt: r.created_at, updatedAt: r.updated_at, hasImage: !!r.has_image, likes: r.likes, comments: r.comments })),
+        rows.map(r => ({ id: r.id, title: r.title, excerpt: r.excerpt, authorName: r.author_name, createdAt: r.created_at, updatedAt: r.updated_at, hasImage: !!r.has_image, likes: r.likes, comments: r.comments })),
         200,
         { 'Cache-Control': 'public, max-age=30, s-maxage=60, stale-while-revalidate=120' }
       )
@@ -532,13 +537,16 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
 
   post: {
     method: 'GET',
-    run: async request => {
+    run: async (request) => {
       const id = queryParam(request, 'id')
       if (!id) throw new HttpError('Geçersiz yazı.', 400)
 
-      // Yazı ve oturum sorguları paralel başlatılarak veritabanı beklemesi yarıya indirildi
       const [p, s] = await Promise.all([
-        first<any>('SELECT id, title, body, created_at, updated_at, EXISTS(SELECT 1 FROM post_images i WHERE i.post_id = posts.id) AS has_image FROM posts WHERE id = ?1', id),
+        first<any>(
+          `SELECT p.id, p.title, p.body, p.created_at, p.updated_at, m.username AS author_name,
+           EXISTS(SELECT 1 FROM post_images i WHERE i.post_id = p.id) AS has_image 
+           FROM posts p LEFT JOIN members m ON m.id = p.member_id WHERE p.id = ?1`, id
+        ),
         currentSession(request)
       ])
 
@@ -546,7 +554,6 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
 
       const voter = await voterKey(request, s)
 
-      // Kalan tüm sorgular tek bir paralel demette çalıştırılır (D1 roundtrip DoS koruması)
       const [likes, liked, comments, ban] = await Promise.all([
         first<{ n: number }>('SELECT COUNT(*) AS n FROM post_likes WHERE post_id = ?1', id),
         first('SELECT 1 FROM post_likes WHERE post_id = ?1 AND voter = ?2', id, voter),
@@ -555,23 +562,13 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       ])
 
       return json({
-        id: p.id, title: p.title, body: p.body, createdAt: p.created_at, updatedAt: p.updated_at, hasImage: !!p.has_image,
+        id: p.id, title: p.title, body: p.body, authorName: p.author_name, createdAt: p.created_at, updatedAt: p.updated_at, hasImage: !!p.has_image,
         likes: likes?.n ?? 0, liked: !!liked,
         comments: comments.map(c => ({
-          id: c.id,
-          body: c.body,
-          createdAt: c.created_at,
-          editedAt: c.edited_at ?? null,
-          memberId: c.member_id,
-          username: c.username,
-          role: getRoleInfo(c.role, c.is_admin).role,
+          id: c.id, body: c.body, createdAt: c.created_at, editedAt: c.edited_at ?? null, memberId: c.member_id, username: c.username, role: getRoleInfo(c.role, c.is_admin).role,
         })),
         viewer: s ? {
-          id: s.id,
-          username: s.username,
-          isAdmin: getRoleInfo(s.role, s.is_admin).level >= 4,
-          isMod: getRoleInfo(s.role, s.is_admin).level >= 2,
-          commentBan: ban ? { until: ban.expires_at } : null,
+          id: s.id, username: s.username, isAdmin: getRoleInfo(s.role, s.is_admin).level >= 4, isMod: getRoleInfo(s.role, s.is_admin).level >= 2, commentBan: ban ? { until: ban.expires_at } : null,
         } : null,
       })
     },
@@ -628,7 +625,6 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
     },
   },
 
-  // Yorumu yalnızca yazan kişi düzenleyebilir (admin dahil kimse başkasının yorumunu düzenleyemez)
   'edit-comment': {
     method: 'POST',
     run: async (request, body) => {
@@ -651,7 +647,7 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
   'save-post': {
     method: 'POST',
     run: async (request, body) => {
-      await requireRole(request, 4)
+      const s = await requireRole(request, 4)
       const title = String(body.title ?? '').trim()
       const text = String(body.body ?? '').trim()
       if (title.length < 3 || title.length > 120) throw new HttpError('Başlık 3–120 karakter olmalı.')
@@ -669,7 +665,7 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
         if (updated.meta.changes !== 1) throw new HttpError('Yazı bulunamadı.', 404)
       } else {
         id = crypto.randomUUID()
-        await run('INSERT INTO posts (id, title, body, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?4)', id, title, text, now)
+        await run('INSERT INTO posts (id, title, body, created_at, updated_at, member_id) VALUES (?1, ?2, ?3, ?4, ?4, ?5)', id, title, text, now, s.id)
       }
       if (image) await run('INSERT OR REPLACE INTO post_images (post_id, mime, data) VALUES (?1, ?2, ?3)', id, image.mime, image.data)
       else if (body.removeImage) await run('DELETE FROM post_images WHERE post_id = ?1', id)
@@ -696,12 +692,16 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
     method: 'GET',
     run: async request => {
       await requireRole(request, 2)
+      const page = Math.max(1, parseInt(queryParam(request, 'page') || '1', 10))
+      const limit = 50
+      const offset = (page - 1) * limit
+
       const rows = await all<any>(
         `SELECT c.id, c.body, c.created_at, c.edited_at, c.ip_hash, m.id AS member_id, m.username, m.role, m.is_admin, p.title AS post_title,
                 EXISTS(SELECT 1 FROM bans b WHERE b.kind = 'comment' AND b.member_id = m.id AND (b.expires_at IS NULL OR b.expires_at > ?1)) AS comment_banned
            FROM comments c JOIN members m ON m.id = c.member_id JOIN posts p ON p.id = c.post_id
-          ORDER BY c.created_at DESC LIMIT 100`,
-        Date.now(),
+          ORDER BY c.created_at DESC LIMIT ?2 OFFSET ?3`,
+        Date.now(), limit, offset
       )
       return json(rows.map(r => ({
         id: r.id,
@@ -746,7 +746,6 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       const callerLevel = getRoleInfo(s.role, s.is_admin).level
       const kind = body.kind === 'ip' ? 'ip' : body.kind === 'comment' ? 'comment' : null
       if (!kind) throw new HttpError('Geçersiz yasak türü.')
-      // IP yasağı masum kişileri de etkileyebildiği için yalnızca admin ve üstü verebilir
       if (kind === 'ip' && callerLevel < 4) throw new HttpError('IP yasağı için admin yetkisi gerekiyor.', 403)
       const hours = body.hours === null || body.hours === undefined || body.hours === '' ? null : Number(body.hours)
       if (hours !== null && (!Number.isFinite(hours) || hours < 1 || hours > 24 * 365)) throw new HttpError('Süre 1 saat ile 1 yıl arasında olmalı. Süresiz için boş bırak.')
@@ -866,7 +865,6 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
   bootstrap: {
     method: 'POST',
     run: async (request, body) => {
-      // Veritabanında bir admin zaten varsa bu uç nokta TOKEN DOĞRU OLSA BİLE anında kapatılır
       if (await first('SELECT 1 FROM members WHERE is_admin = 1 OR role = \'Kurucu\' OR role = \'founder\'')) {
         throw new HttpError('Kurulum zaten tamamlanmış, bu işlem kalıcı olarak kapatılmıştır.', 403)
       }
@@ -878,9 +876,39 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       const password = validatePassword(body.password)
       await run(
         'INSERT INTO members (id, username, email, status, is_admin, role, password_hash, created_at, is_suspended) VALUES (?1, \'admin\', ?2, \'active\', 1, \'Kurucu\', ?3, ?4, 0)',
-        crypto.randomUUID(), email, await hashPassword(password), new Date().toISOString(),
+        crypto.randomUUID(), email, await hashPassword(password), Date.now(),
       )
       return json({ ok: true })
+    },
+  },
+
+  'delete-my-account': {
+    method: 'POST',
+    run: async (request, body) => {
+      const s = await requireSession(request)
+      if (getRoleInfo(s.role, s.is_admin).level === 5) {
+        throw new HttpError('Kurucu hesabı bu yöntemle silinemez. Önce yetkiyi devretmeniz gerekir.', 403)
+      }
+      await rateLimit(request, 'delete-my-account', 5, 15 * 60)
+      
+      const row = await first<{ password_hash: string }>('SELECT password_hash FROM members WHERE id = ?1', s.id)
+      if (!(await verifyPassword(String(body.password ?? ''), row?.password_hash ?? null))) {
+        throw new HttpError('Şifreniz hatalı. Lütfen tekrar deneyin.', 400)
+      }
+
+      await DB().batch([
+        DB().prepare('DELETE FROM sessions WHERE member_id = ?1').bind(s.id),
+        DB().prepare('DELETE FROM reset_tokens WHERE member_id = ?1').bind(s.id),
+        DB().prepare('DELETE FROM activation_codes WHERE member_id = ?1').bind(s.id),
+        DB().prepare('DELETE FROM bans WHERE member_id = ?1').bind(s.id),
+        DB().prepare('DELETE FROM post_likes WHERE voter = ?1').bind(`m:${s.id}`),
+        DB().prepare('DELETE FROM comments WHERE member_id = ?1').bind(s.id),
+        DB().prepare('DELETE FROM members WHERE id = ?1').bind(s.id),
+      ])
+      
+      return json({ ok: true }, 200, {
+        'Set-Cookie': `${COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+      })
     },
   },
 }
@@ -904,7 +932,6 @@ async function handle(request: Request, action: string) {
     return await entry.run(request, body)
   } catch (error) {
     if (error instanceof HttpError) return json({ error: error.message }, error.status)
-    // Ayrıntı yalnızca sunucu günlüğünde kalır, kullanıcıya iç hata metni verilmez
     console.error(error)
     return json({ error: 'Sunucu hatası. Lütfen tekrar dene.' }, 500)
   }
