@@ -24,7 +24,7 @@ function AccountRoleBadge({ role }: { role: string }) {
   return <span className={`acc-role ${cls}`}>{role}</span>
 }
 
-export function ModerationManager({ members, canIpBan = false }: { members: Member[]; canIpBan?: boolean }) {
+export function ModerationManager({ members, canIpBan = true }: { members: Member[]; canIpBan?: boolean }) {
   const [session, setSession] = useState<Session | null>(null)
   const [comments, setComments] = useState<ModComment[]>([])
   const [bans, setBans] = useState<BanRow[]>([])
@@ -79,9 +79,10 @@ export function ModerationManager({ members, canIpBan = false }: { members: Memb
 
   const until = (ban: BanRow) => (ban.expiresAt ? `${formatDate(ban.expiresAt)} tarihine kadar` : 'Süresiz')
 
-  // Hiyerarşi ve Filtreleme Değişkenleri
+  // Hiyerarşi, Filtreleme ve IP Yetkisi Kontrolü
   const myLevel = getLevel(session?.profile.role)
   const myId = session?.profile.id
+  const hasIpBanAuth = canIpBan || !!session?.isAdmin || myLevel >= 4
 
   const uniquePosts = Array.from(new Set(comments.map(c => c.postTitle))).sort()
   const filteredComments = selectedPost ? comments.filter(c => c.postTitle === selectedPost) : comments
@@ -165,7 +166,7 @@ export function ModerationManager({ members, canIpBan = false }: { members: Memb
                   <div style={{ display: 'grid', gap: 8 }}>
                     <select aria-label="Yasak türü" className="custom-select" value={draft.kind} onChange={event => setDraft({ ...draft, kind: event.target.value as 'comment' | 'ip' })}>
                       <option value="comment">Yorum yasağı (hesap)</option>
-                      {canIpBan && <option value="ip">IP yasağı (bağlantı)</option>}
+                      {hasIpBanAuth && <option value="ip">IP yasağı (bağlantı)</option>}
                     </select>
                     <select aria-label="Süre" className="custom-select" value={draft.duration} onChange={event => setDraft({ ...draft, duration: event.target.value })}>
                       {banDurations.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
