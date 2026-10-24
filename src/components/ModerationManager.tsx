@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Ban, Filter, MessageCircle, ShieldAlert, Trash2, X } from 'lucide-react'
+import { Ban, Filter, Globe, MessageCircle, ShieldAlert, Trash2, UserX, X } from 'lucide-react'
 import { communityApi } from '../lib/community'
 import type { Member, Session } from '../lib/community'
 import { banDurations, formatDate, hoursOf } from '../lib/posts'
@@ -30,9 +30,18 @@ export function ModerationManager({ members, canIpBan = true }: { members: Membe
   const [bans, setBans] = useState<BanRow[]>([])
   const [draft, setDraft] = useState<BanDraft | null>(null)
   
+  // Yasaklama formu sekmesi: 'member' (Hesap) veya 'ip' (IP Bağlantısı)
+  const [activeFormTab, setActiveFormTab] = useState<'member' | 'ip'>('member')
+  
+  // Hesap Ban Formu
   const [memberId, setMemberId] = useState('')
   const [memberDuration, setMemberDuration] = useState('24')
   const [memberReason, setMemberReason] = useState('')
+
+  // Doğrudan IP Ban Formu
+  const [ipCommentId, setIpCommentId] = useState('')
+  const [ipDuration, setIpDuration] = useState('24')
+  const [ipReason, setIpReason] = useState('')
   
   const [selectedPost, setSelectedPost] = useState<string>('')
   
@@ -77,9 +86,15 @@ export function ModerationManager({ members, canIpBan = true }: { members: Membe
     setMemberId(''); setMemberReason('')
   }, 'Yorum yasağı uygulandı.')
 
+  const banIpDirectly = () => act(async () => {
+    if (!ipCommentId) throw new Error('Lütfen IP yasağı uygulanacak bağlantıyı/yorumu seçin.')
+    await communityApi('ban', { kind: 'ip', commentId: ipCommentId, hours: hoursOf(ipDuration), reason: ipReason })
+    setIpCommentId(''); setIpReason('')
+  }, 'IP yasağı uygulandı.')
+
   const until = (ban: BanRow) => (ban.expiresAt ? `${formatDate(ban.expiresAt)} tarihine kadar` : 'Süresiz')
 
-  // Hiyerarşi, Filtreleme ve IP Yetkisi Kontrolü
+  // Hiyerarşi, Yetki ve Filtreler
   const myLevel = getLevel(session?.profile.role)
   const myId = session?.profile.id
   const hasIpBanAuth = canIpBan || !!session?.isAdmin || myLevel >= 4
@@ -99,32 +114,95 @@ export function ModerationManager({ members, canIpBan = true }: { members: Membe
       <p className="field-hint" style={{ marginTop: 12 }}>IP yasağı o bağlantıdan giriş, beğeni ve yorum dahil tüm işlemleri engeller. Aynı IP’yi paylaşan başka kişileri de etkileyebilir (ör. mobil operatör ağları), bu yüzden çoğu durumda yorum yasağı daha güvenlidir. Kendi bağlantını yasaklayamazsın.</p>
     </section>
 
+    {/* YASAKLAMA KARTI: HESAP VE IP BAN SEKMELERİ */}
     <section className="panel-card members-card">
-      <div className="list-heading"><h2>Hesaba yorum yasağı</h2></div>
-      <div className="account-form" style={{ display: 'grid', gap: 10 }}>
-        <div className="form-field">
-          <label htmlFor="ban-member">Hesap</label>
-          <select id="ban-member" className="custom-select" value={memberId} onChange={event => setMemberId(event.target.value)}>
-            <option value="">Hesap seç…</option>
-            {members.filter(m => m.status === 'active' && m.id !== myId && myLevel > getLevel(m.role)).map(m => (
-              <option key={m.id} value={m.id}>{m.username} ({m.role})</option>
-            ))}
-          </select>
-        </div>
-        <div className="form-field">
-          <label htmlFor="ban-member-duration">Süre</label>
-          <select id="ban-member-duration" className="custom-select" value={memberDuration} onChange={event => setMemberDuration(event.target.value)}>
-            {banDurations.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
-          </select>
-        </div>
-        <div className="form-field">
-          <label htmlFor="ban-member-reason">Sebep (isteğe bağlı)</label>
-          <input id="ban-member-reason" value={memberReason} onChange={event => setMemberReason(event.target.value)} maxLength={200} />
-        </div>
-        <button className="button button-primary" type="button" disabled={busy || !memberId} onClick={banMember}>Yorum yasağı uygula<Ban size={16} /></button>
+      <div className="list-heading">
+        <h2>Yasak Uygula</h2>
       </div>
+
+      {/* Sekmeler */}
+      <div style={{ display: 'flex', gap: 8, margin: '16px 0 20px', borderBottom: '1px solid var(--line)', paddingBottom: 12 }}>
+        <button
+          type="button"
+          onClick={() => setActiveFormTab('member')}
+          className={`button ${activeFormTab === 'member' ? 'button-primary' : 'button-outline'}`}
+          style={{ padding: '8px 16px', fontSize: '12px' }}
+        >
+          <UserX size={15} /> Hesaba Yorum Yasağı
+        </button>
+        {hasIpBanAuth && (
+          <button
+            type="button"
+            onClick={() => setActiveFormTab('ip')}
+            className={`button ${activeFormTab === 'ip' ? 'button-primary' : 'button-outline'}`}
+            style={{ padding: '8px 16px', fontSize: '12px' }}
+          >
+            <Globe size={15} /> IP Yasağı (Bağlantı)
+          </button>
+        )}
+      </div>
+
+      {/* 1. SEKME: HESABA YORUM YASAĞI */}
+      {activeFormTab === 'member' && (
+        <div className="account-form" style={{ display: 'grid', gap: 10, marginTop: 0 }}>
+          <div className="form-field">
+            <label htmlFor="ban-member">Yasaklanacak Hesap</label>
+            <select id="ban-member" className="custom-select" value={memberId} onChange={event => setMemberId(event.target.value)}>
+              <option value="">Hesap seç…</option>
+              {members.filter(m => m.status === 'active' && m.id !== myId && myLevel > getLevel(m.role)).map(m => (
+                <option key={m.id} value={m.id}>{m.username} ({m.role})</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-field">
+            <label htmlFor="ban-member-duration">Süre</label>
+            <select id="ban-member-duration" className="custom-select" value={memberDuration} onChange={event => setMemberDuration(event.target.value)}>
+              {banDurations.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
+            </select>
+          </div>
+          <div className="form-field">
+            <label htmlFor="ban-member-reason">Sebep (isteğe bağlı)</label>
+            <input id="ban-member-reason" value={memberReason} onChange={event => setMemberReason(event.target.value)} maxLength={200} placeholder="Örn: Hakaret veya kural ihlali" />
+          </div>
+          <button className="button button-primary" type="button" disabled={busy || !memberId} onClick={banMember}>Yorum yasağı uygula<Ban size={16} /></button>
+        </div>
+      )}
+
+      {/* 2. SEKME: IP YASAĞI (BAĞLANTI) */}
+      {activeFormTab === 'ip' && hasIpBanAuth && (
+        <div className="account-form" style={{ display: 'grid', gap: 10, marginTop: 0 }}>
+          <div className="form-field">
+            <label htmlFor="ban-ip-comment">Yasaklanacak IP / Yorum Kaydı</label>
+            <select id="ban-ip-comment" className="custom-select" value={ipCommentId} onChange={event => setIpCommentId(event.target.value)}>
+              <option value="">IP bağlantısı seç…</option>
+              {comments
+                .filter(c => c.memberId !== myId && myLevel > getLevel(c.role))
+                .map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.username} · IP [{c.ipTag}] · &quot;{c.body.slice(0, 35)}...&quot;
+                  </option>
+                ))}
+            </select>
+            <span className="field-hint">IP adresi gizlilik gereği yorum kayıtlarından tespit edilir. Kendi IP adresinizi yasaklayamazsınız.</span>
+          </div>
+          <div className="form-field">
+            <label htmlFor="ban-ip-duration">Süre</label>
+            <select id="ban-ip-duration" className="custom-select" value={ipDuration} onChange={event => setIpDuration(event.target.value)}>
+              {banDurations.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
+            </select>
+          </div>
+          <div className="form-field">
+            <label htmlFor="ban-ip-reason">Sebep (isteğe bağlı)</label>
+            <input id="ban-ip-reason" value={ipReason} onChange={event => setIpReason(event.target.value)} maxLength={200} placeholder="Örn: Spam saldırısı veya çoklu hesap istismarı" />
+          </div>
+          <button className="button modal-btn-danger" type="button" style={{ color: '#fff', background: '#974d34', border: 'none' }} disabled={busy || !ipCommentId} onClick={banIpDirectly}>
+            IP Bağlantısını Yasakla <Globe size={16} />
+          </button>
+        </div>
+      )}
     </section>
 
+    {/* YORUMLAR LİSTESİ */}
     <section className="panel-card members-card">
       <div className="list-heading"><h2>Son yorumlar</h2><span>{filteredComments.length} yorum</span></div>
       
@@ -157,13 +235,15 @@ export function ModerationManager({ members, canIpBan = true }: { members: Membe
                   <strong>
                     {item.username} <AccountRoleBadge role={item.role} />
                     {item.commentBanned && <small style={{ marginLeft: 8, opacity: .7 }}>(yorum yasaklı)</small>}
+                    {isMe && <small style={{ marginLeft: 8, color: '#557847' }}>(Sen)</small>}
                   </strong>
-                  <small style={{ opacity: .65 }}>{formatDate(item.createdAt)} · {item.postTitle} · {item.ipTag}</small>
+                  <small style={{ opacity: .65 }}>{formatDate(item.createdAt)} · {item.postTitle} · IP: {item.ipTag}</small>
                 </div>
                 <p style={{ margin: '6px 0 10px', whiteSpace: 'pre-wrap' }}>{item.body}</p>
                 
                 {draft?.commentId === item.id ? (
-                  <div style={{ display: 'grid', gap: 8 }}>
+                  <div style={{ display: 'grid', gap: 8, background: '#f5f7ee', padding: 12, borderRadius: 8, border: '1px solid #dce4d1' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 600, color: '#4d5e4e' }}>Yasak Türü:</div>
                     <select aria-label="Yasak türü" className="custom-select" value={draft.kind} onChange={event => setDraft({ ...draft, kind: event.target.value as 'comment' | 'ip' })}>
                       <option value="comment">Yorum yasağı (hesap)</option>
                       {hasIpBanAuth && <option value="ip">IP yasağı (bağlantı)</option>}
@@ -179,12 +259,14 @@ export function ModerationManager({ members, canIpBan = true }: { members: Membe
                   </div>
                 ) : (
                   <div className="row-actions">
-                    {canAct && (
+                    {canAct ? (
                       <>
-                        <button className="icon-button" type="button" aria-label="Yorumu sil" disabled={busy} onClick={() => deleteComment(item.id)}><Trash2 size={16} /></button>
-                        <button className="icon-button" type="button" aria-label="Yasakla" disabled={busy} onClick={() => setDraft({ commentId: item.id, kind: 'comment', duration: '24', reason: '' })}><ShieldAlert size={16} /></button>
+                        <button className="icon-button" type="button" aria-label="Yorumu sil" title="Yorumu sil" disabled={busy} onClick={() => deleteComment(item.id)}><Trash2 size={16} /></button>
+                        <button className="icon-button" type="button" aria-label="Yasakla" title="Yasakla" disabled={busy} onClick={() => setDraft({ commentId: item.id, kind: hasIpBanAuth ? 'ip' : 'comment', duration: '24', reason: '' })}><ShieldAlert size={16} /></button>
                       </>
-                    )}
+                    ) : isMe ? (
+                      <span style={{ fontSize: '11px', opacity: 0.5, fontStyle: 'italic' }}>Kendi yorumun</span>
+                    ) : null}
                   </div>
                 )}
               </li>
@@ -194,4 +276,4 @@ export function ModerationManager({ members, canIpBan = true }: { members: Membe
       )}
     </section>
   </>
-}
+            }
