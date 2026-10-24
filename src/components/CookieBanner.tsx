@@ -8,7 +8,7 @@ export function CookieBanner() {
     // Daha önce onay/red verilmiş mi kontrol et
     const consent = localStorage.getItem('sa_cookie_consent')
     if (!consent) {
-      // Biraz gecikmeli gelsin (animasyon hissi için)
+      // Animasyon hissi için 1 saniye sonra göster
       const timer = setTimeout(() => setShow(true), 1000)
       return () => clearTimeout(timer)
     }
@@ -17,13 +17,11 @@ export function CookieBanner() {
   const handleAccept = () => {
     localStorage.setItem('sa_cookie_consent', 'accepted')
     setShow(false)
-    // İleride eklenecek analiz çerezlerini (ör: Google Analytics) burada aktifleştirebilirsiniz.
   }
 
   const handleReject = () => {
     localStorage.setItem('sa_cookie_consent', 'rejected')
     setShow(false)
-    // Sadece zorunlu çerezler (oturum vb.) çalışmaya devam eder.
   }
 
   if (!show) return null
@@ -36,7 +34,7 @@ export function CookieBanner() {
         position: 'fixed',
         bottom: 24,
         left: 24,
-        zIndex: 2147483001, // Bakım modunun hemen üstünde
+        zIndex: 2147482999, // Bakım modunun (2147483000) arkasında kalması için düşürüldü
         maxWidth: 420,
         width: 'calc(100% - 48px)',
         background: '#fffefa',
