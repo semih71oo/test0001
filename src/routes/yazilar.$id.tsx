@@ -161,7 +161,8 @@ function PostPage() {
         <ul style={{ listStyle: 'none', padding: 0, display: 'grid', gap: 14 }}>
           {post.comments.map(item => {
             const isOwner = post.viewer && post.viewer.id === item.memberId
-            const canEdit = isOwner || post.viewer?.isAdmin
+            // Yorumu yalnızca yazan kişi düzenleyebilir (silmeyi moderatör/admin yapabilir)
+            const canEdit = !!isOwner
             const canDelete = isOwner || post.viewer?.isMod || post.viewer?.isAdmin
 
             return (
