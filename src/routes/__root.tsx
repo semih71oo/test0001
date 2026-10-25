@@ -1,6 +1,7 @@
 import { HeadContent, Scripts, createRootRoute, useRouterState } from '@tanstack/react-router'
 import { MaintenanceGate } from '../components/MaintenanceGate'
 import { CookieBanner } from '../components/CookieBanner'
+import { PageLoader } from '../components/PageLoader'
 import { NotFoundPage } from '../components/NotFoundPage'
 
 import '../styles.css'
@@ -112,6 +113,10 @@ export const Route = createRootRoute({
     ],
     scripts: [
       {
+        // Aynı sekmede daha önce yüklendiyse yükleme ekranı bir daha gösterilmez (ilk boyamadan önce çalışır)
+        children: `try{if(sessionStorage.getItem('sa-loaded'))document.documentElement.classList.add('sa-skip-loader')}catch(e){}`,
+      },
+      {
         type: 'application/ld+json',
         children: JSON.stringify(personSchema),
       },
@@ -134,11 +139,12 @@ export const Route = createRootRoute({
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="tr">
+    <html lang="tr" suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>
       <body>
+        <PageLoader />
         <RouterLoadingBar />
         <MaintenanceGate />
         <CookieBanner />
