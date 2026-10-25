@@ -146,7 +146,7 @@ function HomePage() {
           <span className="brand-icon"><Code2 size={19} /></span>
           <span>semih<span className="brand-light">algan</span>.</span>
         </a>
-        <p>© {new Date().getFullYear()} Semih Algan. Tüm Hakları Saklıdır. 2026.</p>
+        <p>© {new Date().getFullYear()} Semih Algan. Tüm Hakları Saklıdır.</p>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', fontSize: '0.875rem' }}>
           <a href="/guncellemeler" style={{ color: 'currentColor', opacity: 0.75, textDecoration: 'none' }}>Güncellemeler</a>
           <a href="/kvkk" style={{ color: 'currentColor', opacity: 0.75, textDecoration: 'none' }}>KVKK</a>
