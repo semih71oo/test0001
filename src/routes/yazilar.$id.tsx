@@ -8,6 +8,8 @@ import { formatDate, imageUrl } from '../lib/posts'
 import type { PostDetail } from '../lib/posts'
 
 export const Route = createFileRoute('/yazilar/$id')({
+  // Veri tarayıcıda yüklenir: sunucuda göreli /api adresine istek atılamadığı ve giriş çerezi gitmediği için SSR kapalı
+  ssr: false,
   loader: async ({ params }) => {
     try {
       const post = await communityApi<PostDetail>(`post?id=${encodeURIComponent(params.id)}`)
