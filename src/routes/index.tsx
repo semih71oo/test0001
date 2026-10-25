@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { DeveloperBoard } from '../components/DeveloperBoard'
-import { ArrowDown, ArrowDownRight, ArrowRight, ArrowUpRight, Check, CheckCheck, ChevronRight, Code2, Copy, Dribbble, Mail, MapPin, Menu, Phone, Puzzle, Sparkles, X } from 'lucide-react'
+import { ArrowDown, ArrowDownRight, ArrowRight, ArrowUpRight, Check, CheckCheck, ChevronRight, Code2, Copy, Dribbble, Mail, MapPin, Menu, MessageCircle, Puzzle, Sparkles, X } from 'lucide-react'
 
 export const Route = createFileRoute('/')({
   component: HomePage,
@@ -108,14 +108,45 @@ function HomePage() {
           <div className="about-card"><span className="small-label">KODUN ARKASINDAKİ İNSAN</span><div className="monogram">sa<span>.</span></div><div className="profile-caption"><span>Semih Algan</span><span>Yazılım Geliştirici <ArrowUpRight size={16} /></span></div><div className="profile-location"><MapPin size={15} /> Kırıkkale, Türkiye</div></div>
           <div className="about-copy"><div className="eyebrow section-eyebrow">02 / HAKKIMDA</div><h2 id="about-title">Merakla başladı.<br /><span>Kodla devam ediyor.</span></h2><p>Ben Semih Algan. 26 Mayıs 2011’de Kırıkkale’nin Merkez ilçesinde doğdum. Yazılım geliştirmeyi seven, fikirlerini hayata geçirmekten keyif alan bir geliştiriciyim.</p><p>Basketbol ve satrançla ilgileniyorum. Sahada takım ruhunu, satrançta stratejik düşünmeyi seviyorum. Aynı merakı ve çözüm odaklı bakışı yazılımlarıma da taşıyorum.</p><div className="interest-tags"><span><Code2 size={16} /> Yazılım</span><span><Dribbble size={16} /> Basketbol</span><span><Puzzle size={16} /> Satranç</span></div><a className="about-link" href="#iletisim">Tanışalım <ArrowUpRight size={17} /></a></div>
         </section>
-        <section className="contact-section" id="iletisim" aria-labelledby="contact-title"><div className="container contact-inner"><div className="contact-intro"><div className="eyebrow section-eyebrow">03 / İLETİŞİM</div><h2 id="contact-title">Bir fikirle<br />başlayabiliriz<span>.</span></h2><p>Bir sorunun, önerin ya da paylaşmak istediğin<br className="desktop-break" /> bir fikrin varsa, bana ulaşabilirsin.</p><span className="contact-signature">Güzel işler, bir merhabayla başlar. <ArrowDownRight size={22} /></span></div><div className="contact-options"><div className="contact-card"><div className="contact-icon"><Mail size={22} /></div><div className="contact-detail"><span>E-POSTA GÖNDER</span><a href="mailto:71.semih.algan@gmail.com">71.semih.algan@gmail.com <ArrowUpRight size={18} /></a></div><button type="button" className="copy-button" aria-label="E-posta adresini kopyala" onClick={copyEmail}>{copyStatus === 'E-posta adresi kopyalandı.' ? <Check size={18} /> : <Copy size={18} />}</button></div><div className="contact-card"><div className="contact-icon"><Phone size={22} /></div><div className="contact-detail"><span>TELEFONLA ULAŞ</span><a href="tel:+905333557971">0533 355 79 71 <ArrowUpRight size={18} /></a></div></div><p className="copy-status" role="status">{copyStatus}</p></div></div></section>
+        <section className="contact-section" id="iletisim" aria-labelledby="contact-title">
+          <div className="container contact-inner">
+            <div className="contact-intro">
+              <div className="eyebrow section-eyebrow">03 / İLETİŞİM</div>
+              <h2 id="contact-title">Bir fikirle<br />başlayabiliriz<span>.</span></h2>
+              <p>Bir sorunun, önerin ya da paylaşmak istediğin<br className="desktop-break" /> bir fikrin varsa, bana ulaşabilirsin.</p>
+              <span className="contact-signature">Güzel işler, bir merhabayla başlar. <ArrowDownRight size={22} /></span>
+            </div>
+            <div className="contact-options">
+              <div className="contact-card">
+                <div className="contact-icon"><Mail size={22} /></div>
+                <div className="contact-detail">
+                  <span>E-POSTA GÖNDER</span>
+                  <a href="mailto:71.semih.algan@gmail.com">71.semih.algan@gmail.com <ArrowUpRight size={18} /></a>
+                </div>
+                <button type="button" className="copy-button" aria-label="E-posta adresini kopyala" onClick={copyEmail}>
+                  {copyStatus === 'E-posta adresi kopyalandı.' ? <Check size={18} /> : <Copy size={18} />}
+                </button>
+              </div>
+              <div className="contact-card">
+                <div className="contact-icon"><MessageCircle size={22} /></div>
+                <div className="contact-detail">
+                  <span>WHATSAPP İLE ULAŞ</span>
+                  <a href="https://wa.me/905333557971" target="_blank" rel="noopener noreferrer">
+                    0533 355 79 71 <ArrowUpRight size={18} />
+                  </a>
+                </div>
+              </div>
+              <p className="copy-status" role="status">{copyStatus}</p>
+            </div>
+          </div>
+        </section>
       </main>
       <footer className="container site-footer">
         <a className="brand footer-brand" href="#baslangic">
           <span className="brand-icon"><Code2 size={19} /></span>
           <span>semih<span className="brand-light">algan</span>.</span>
         </a>
-        <p>© {new Date().getFullYear()} Semih Algan. Özenle geliştirildi.</p>
+        <p>© {new Date().getFullYear()} Semih Algan. Tüm Hakları Saklıdır. 2026.</p>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', fontSize: '0.875rem' }}>
           <a href="/guncellemeler" style={{ color: 'currentColor', opacity: 0.75, textDecoration: 'none' }}>Güncellemeler</a>
           <a href="/kvkk" style={{ color: 'currentColor', opacity: 0.75, textDecoration: 'none' }}>KVKK</a>
