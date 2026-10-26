@@ -1,13 +1,12 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useState, useRef } from 'react'
 import type { FormEvent } from 'react'
-import { Check, Heart, Pencil, Send, Trash2, X } from 'lucide-react'
+import { Check, ChevronDown, Heart, Pencil, Send, Trash2, X } from 'lucide-react'
 import { PublicShell } from '../components/PublicShell'
 import { communityApi } from '../lib/community'
 import { formatDate, imageUrl } from '../lib/posts'
 import type { PostDetail } from '../lib/posts'
 
-// Kod renklendirme (Syntax Highlighting) için Highlight.js ve temasını içe aktarıyoruz
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
 
@@ -73,12 +72,10 @@ function AccountRoleBadge({ role }: { role: string }) {
   return <span className={`acc-role ${cls}`}>{role}</span>
 }
 
-// Zengin Metin (Markdown) Bileşeni
 function MarkdownRenderer({ content }: { content: string }) {
   const rootRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    // Sayfa render edildikten sonra <pre><code> bloklarını renklendir
     if (rootRef.current) {
       rootRef.current.querySelectorAll('pre code').forEach((block) => {
         hljs.highlightElement(block as HTMLElement)
@@ -89,36 +86,24 @@ function MarkdownRenderer({ content }: { content: string }) {
   const parseMarkdown = (text: string) => {
     const tokens: string[] = []
     
-    // 1. KOD BLOKLARINI KORUMAYA AL (Çok satırlı)
     let processed = text.replace(/```([a-z]*)\n([\s\S]*?)```/g, (_match, lang, code) => {
       const placeholder = `__CODE_BLOCK_${tokens.length}__`
-      // XSS ve HTML karakterlerini escape et
       const escapedCode = code.replace(/</g, '&lt;').replace(/>/g, '&gt;')
       tokens.push(`<pre style="margin: 16px 0; border-radius: 8px; overflow: auto; border: 1px solid var(--line); background: #f6f8fa;"><code class="language-${lang}" style="padding: 16px; font-size: 0.9rem; font-family: monospace; display: block;">${escapedCode}</code></pre>`)
       return placeholder
     })
 
-    // 2. TEMEL GÜVENLİK (Geri kalan HTML'i etkisiz hale getir)
     processed = processed.replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    
-    // 3. MD KURALLARI
-    // Satır içi kod (`kod`)
     processed = processed.replace(/`([^`\n]+)`/g, '<code style="background: #edf2e1; color: #507146; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; font-family: monospace;">$1</code>')
-    // Başlıklar
     processed = processed.replace(/^### (.*$)/gim, '<h3 style="margin: 24px 0 12px; font-size: 1.25rem;">$1</h3>')
     processed = processed.replace(/^## (.*$)/gim, '<h2 style="margin: 28px 0 14px; font-size: 1.5rem; letter-spacing: -0.5px;">$1</h2>')
     processed = processed.replace(/^# (.*$)/gim, '<h1 style="margin: 32px 0 16px; font-size: 1.8rem; letter-spacing: -1px;">$1</h1>')
-    // Kalın ve Eğik
     processed = processed.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     processed = processed.replace(/\*(.*?)\*/g, '<em>$1</em>')
-    // Linkler
     processed = processed.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" style="color: var(--green); text-decoration: underline; text-underline-offset: 2px; font-weight: 600;">$1</a>')
-    // Alıntı (Blockquote)
     processed = processed.replace(/^> (.*$)/gim, '<blockquote style="border-left: 4px solid var(--green); padding: 6px 14px; color: var(--muted); margin: 16px 0; font-style: italic; background: #f4f6ee; border-radius: 0 8px 8px 0;">$1</blockquote>')
-    // Satır atlamaları
     processed = processed.replace(/\n/g, '<br/>')
 
-    // 4. KORUNAN KOD BLOKLARINI GERİ YÜKLE
     tokens.forEach((html, index) => {
       processed = processed.replace(`__CODE_BLOCK_${index}__`, html)
     })
@@ -143,6 +128,9 @@ function PostPage() {
   const [comment, setComment] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+
+  // YENİLİK (ADIM 8): YORUM SAYFALAMA STATE'İ (Varsayılan 10 yorum gösterir)
+  const [visibleCommentsCount, setVisibleCommentsCount] = useState(10)
 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingText, setEditingText] = useState('')
@@ -189,6 +177,8 @@ function PostPage() {
       await communityApi('comment', { postId: post.id, body: comment })
       setComment('')
       await reloadPost()
+      // Yeni yorum yapıldığında en azından ilk sayfada görünsün
+      setVisibleCommentsCount(prev => Math.max(prev, 10))
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Yorum gönderilemedi.')
     } finally {
@@ -242,6 +232,8 @@ function PostPage() {
   if (loaderError === 'error' || !post) return <PublicShell><p className="message message-error" role="alert">Yazı şu an yüklenemiyor.</p></PublicShell>
 
   const banned = post.viewer?.commentBan
+  const visibleComments = post.comments.slice(0, visibleCommentsCount)
+  const remainingCount = post.comments.length - visibleCommentsCount
 
   return (
     <PublicShell>
@@ -250,7 +242,6 @@ function PostPage() {
       
       {post.hasImage && <img src={imageUrl(post.id, post.updatedAt)} alt="" style={{ width: '100%', maxHeight: 500, objectFit: 'cover', borderRadius: 16, marginBottom: 22 }} />}
       
-      {/* İŞTE YENİ ZENGİN METİN BİLEŞENİMİZ BURADA ÇALIŞIYOR */}
       <MarkdownRenderer content={post.body} />
 
       <div style={{ margin: '28px 0', display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -284,81 +275,95 @@ function PostPage() {
       )}
 
       {!post.comments.length ? <p style={{ opacity: .7 }}>İlk yorumu sen yaz.</p> : (
-        <ul style={{ listStyle: 'none', padding: 0, display: 'grid', gap: 14 }}>
-          {post.comments.map(item => {
-            const isOwner = post.viewer && post.viewer.id === item.memberId
-            const canEdit = !!isOwner
-            const canDelete = isOwner || post.viewer?.isMod || post.viewer?.isAdmin
+        <>
+          <ul style={{ listStyle: 'none', padding: 0, display: 'grid', gap: 14 }}>
+            {visibleComments.map(item => {
+              const isOwner = post.viewer && post.viewer.id === item.memberId
+              const canEdit = !!isOwner
+              const canDelete = isOwner || post.viewer?.isMod || post.viewer?.isAdmin
 
-            return (
-              <li key={item.id} className="panel-card" style={{ padding: 16 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: '.9rem' }}>
-                  <strong>
-                    {item.username} <AccountRoleBadge role={item.role} />
-                  </strong>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ opacity: .6 }}>{formatDate(item.createdAt)}</span>
-                    {item.editedAt && (
-                      <span title={`Son düzenleme: ${formatDate(item.editedAt)}`} style={{ fontSize: '0.78rem', color: '#557847', background: '#edf4e4', border: '1px solid #d0ddc0', padding: '2px 6px', borderRadius: 4, fontStyle: 'italic' }}>
-                        (düzenlendi)
-                      </span>
-                    )}
+              return (
+                <li key={item.id} className="panel-card" style={{ padding: 16 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: '.9rem' }}>
+                    <strong>
+                      {item.username} <AccountRoleBadge role={item.role} />
+                    </strong>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ opacity: .6 }}>{formatDate(item.createdAt)}</span>
+                      {item.editedAt && (
+                        <span title={`Son düzenleme: ${formatDate(item.editedAt)}`} style={{ fontSize: '0.78rem', color: '#557847', background: '#edf4e4', border: '1px solid #d0ddc0', padding: '2px 6px', borderRadius: 4, fontStyle: 'italic' }}>
+                          (düzenlendi)
+                        </span>
+                      )}
 
-                    {editingId !== item.id && (
-                      <div className="row-actions" style={{ marginLeft: 6 }}>
-                        {canEdit && (
-                          <button type="button" className="icon-button" title="Yorumu düzenle" aria-label="Yorumu düzenle" disabled={actionBusy} onClick={() => startEdit(item.id, item.body)}>
-                            <Pencil size={14} />
-                          </button>
-                        )}
-                        {canDelete && (
-                          <button type="button" className="icon-button" title="Yorumu sil" aria-label="Yorumu sil" disabled={actionBusy} onClick={() => setDeletingId(item.id)}>
-                            <Trash2 size={14} />
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {deletingId === item.id && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, padding: 8, background: '#fff2eb', border: '1px solid #eccfc0', borderRadius: 8 }}>
-                    <span style={{ fontSize: '0.82rem', color: '#974d34' }}>Bu yorumu silmek istediğine emin misin?</span>
-                    <button type="button" className="danger-button" disabled={actionBusy} onClick={() => deleteComment(item.id)}>
-                      {actionBusy ? 'Siliniyor…' : 'Evet, sil'}
-                    </button>
-                    <button type="button" className="icon-button" title="Vazgeç" aria-label="Vazgeç" disabled={actionBusy} onClick={() => setDeletingId(null)}>
-                      <X size={14} />
-                    </button>
-                  </div>
-                )}
-
-                {editingId === item.id ? (
-                  <div style={{ marginTop: 10, display: 'grid', gap: 8 }}>
-                    <textarea
-                      value={editingText}
-                      onChange={e => setEditingText(e.target.value)}
-                      maxLength={1000}
-                      rows={3}
-                      disabled={actionBusy}
-                      style={{ width: '100%', borderRadius: 8, padding: 10, font: 'inherit', border: '1px solid #dce2d3', opacity: actionBusy ? 0.6 : 1 }}
-                    />
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button type="button" className="button button-primary" style={{ padding: '8px 14px', fontSize: '0.85rem' }} disabled={actionBusy || !editingText.trim()} onClick={() => submitEdit(item.id)}>
-                        {actionBusy ? 'Kaydediliyor…' : 'Kaydet'} <Check size={14} />
-                      </button>
-                      <button type="button" className="button button-outline" style={{ padding: '8px 14px', fontSize: '0.85rem' }} disabled={actionBusy} onClick={cancelEdit}>
-                        Vazgeç <X size={14} />
-                      </button>
+                      {editingId !== item.id && (
+                        <div className="row-actions" style={{ marginLeft: 6 }}>
+                          {canEdit && (
+                            <button type="button" className="icon-button" title="Yorumu düzenle" aria-label="Yorumu düzenle" disabled={actionBusy} onClick={() => startEdit(item.id, item.body)}>
+                              <Pencil size={14} />
+                            </button>
+                          )}
+                          {canDelete && (
+                            <button type="button" className="icon-button" title="Yorumu sil" aria-label="Yorumu sil" disabled={actionBusy} onClick={() => setDeletingId(item.id)}>
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
-                ) : (
-                  <p style={{ margin: '8px 0 0', whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>{item.body}</p>
-                )}
-              </li>
-            )
-          })}
-        </ul>
+
+                  {deletingId === item.id && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, padding: 8, background: '#fff2eb', border: '1px solid #eccfc0', borderRadius: 8 }}>
+                      <span style={{ fontSize: '0.82rem', color: '#974d34' }}>Bu yorumu silmek istediğine emin misin?</span>
+                      <button type="button" className="danger-button" disabled={actionBusy} onClick={() => deleteComment(item.id)}>
+                        {actionBusy ? 'Siliniyor…' : 'Evet, sil'}
+                      </button>
+                      <button type="button" className="icon-button" title="Vazgeç" aria-label="Vazgeç" disabled={actionBusy} onClick={() => setDeletingId(null)}>
+                        <X size={14} />
+                      </button>
+                    </div>
+                  )}
+
+                  {editingId === item.id ? (
+                    <div style={{ marginTop: 10, display: 'grid', gap: 8 }}>
+                      <textarea
+                        value={editingText}
+                        onChange={e => setEditingText(e.target.value)}
+                        maxLength={1000}
+                        rows={3}
+                        disabled={actionBusy}
+                        style={{ width: '100%', borderRadius: 8, padding: 10, font: 'inherit', border: '1px solid #dce2d3', opacity: actionBusy ? 0.6 : 1 }}
+                      />
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button type="button" className="button button-primary" style={{ padding: '8px 14px', fontSize: '0.85rem' }} disabled={actionBusy || !editingText.trim()} onClick={() => submitEdit(item.id)}>
+                          {actionBusy ? 'Kaydediliyor…' : 'Kaydet'} <Check size={14} />
+                        </button>
+                        <button type="button" className="button button-outline" style={{ padding: '8px 14px', fontSize: '0.85rem' }} disabled={actionBusy} onClick={cancelEdit}>
+                          Vazgeç <X size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p style={{ margin: '8px 0 0', whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>{item.body}</p>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+
+          {/* YENİLİK: DAHA FAZLA YORUM GÖSTER BUTONU */}
+          {remainingCount > 0 && (
+            <button 
+              type="button" 
+              className="button button-outline" 
+              onClick={() => setVisibleCommentsCount(prev => prev + 10)}
+              style={{ width: '100%', marginTop: 18, justifyContent: 'center' }}
+            >
+              Daha fazla yorum gör ({remainingCount} yorum daha) <ChevronDown size={16} />
+            </button>
+          )}
+        </>
       )}
     </PublicShell>
   )
