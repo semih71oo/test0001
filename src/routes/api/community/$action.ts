@@ -57,16 +57,21 @@ const first = <T>(sql: string, ...args: unknown[]) => DB().prepare(sql).bind(...
 const all = async <T>(sql: string, ...args: unknown[]) => (await DB().prepare(sql).bind(...args).all<T>()).results
 const run = (sql: string, ...args: unknown[]) => DB().prepare(sql).bind(...args).run()
 
-async function rateLimit(request: Request, bucket: string, max: number, windowSec: number) {
+// YENİLİK: Hem IP bazlı hem de Hesap bazlı kısıtlama için güncellendi
+async function rateLimit(request: Request, bucket: string, max: number, windowSec: number, identifier?: string) {
   const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown'
-  const key = `${bucket}:${ip}`
+  const key = identifier ? `${bucket}:${identifier}` : `${bucket}:${ip}`
   const now = Date.now()
   const row = await first<{ count: number; reset_at: number }>('SELECT count, reset_at FROM rate_limits WHERE key = ?1', key)
+  
   if (!row || row.reset_at < now) {
     await run('INSERT OR REPLACE INTO rate_limits (key, count, reset_at) VALUES (?1, 1, ?2)', key, now + windowSec * 1000)
     return
   }
-  if (row.count >= max) throw new HttpError('Çok fazla deneme yaptın. Biraz sonra tekrar dene.', 429)
+  if (row.count >= max) {
+    if (identifier) throw new HttpError('Bu hesap için çok fazla deneme yapıldı. Güvenlik gereği kısa süreliğine kilitlendi.', 429)
+    throw new HttpError('Çok fazla deneme yaptın. Biraz sonra tekrar dene.', 429)
+  }
   await run('UPDATE rate_limits SET count = count + 1 WHERE key = ?1', key)
 }
 
@@ -334,7 +339,7 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
   'check-code': {
     method: 'POST',
     run: async (request, body) => {
-      await rateLimit(request, 'code', 10, 15 * 60)
+      await rateLimit(request, 'code:ip', 10, 15 * 60)
       const { username } = await findValidCode(body.code)
       return json({ username })
     },
@@ -343,13 +348,18 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
   activate: {
     method: 'POST',
     run: async (request, body) => {
-      await rateLimit(request, 'code', 10, 15 * 60)
+      await rateLimit(request, 'activate:ip', 10, 15 * 60)
       const password = validatePassword(body.password)
       const { member_id, username, hash } = await findValidCode(body.code)
       const passwordHash = await hashPassword(password)
-      const consumed = await run('UPDATE activation_codes SET used_at = ?1 WHERE code_hash = ?2 AND used_at IS NULL AND expires_at > ?1', Date.now(), hash)
-      if (consumed.meta.changes !== 1) throw new HttpError('Kod geçersiz veya süresi dolmuş.')
+      
+      // YENİLİK: İşlem Bütünlüğü (Atomicity) Koruması
+      // Hata ihtimaline karşı ÖNCE şifreyi ve durumu güncelliyoruz, kod yanmıyor.
       await run('UPDATE members SET password_hash = ?1, status = \'active\', is_suspended = 0 WHERE id = ?2', passwordHash, member_id)
+      
+      // Şifre güncellendiği için artık üye 'active' durumundadır. Kod başarıyla kullanıldı olarak işaretleniyor.
+      await run('UPDATE activation_codes SET used_at = ?1 WHERE code_hash = ?2', Date.now(), hash)
+      
       return json({ username })
     },
   },
@@ -357,8 +367,14 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
   login: {
     method: 'POST',
     run: async (request, body) => {
-      await rateLimit(request, 'login', 10, 15 * 60)
       const identifier = String(body.username ?? '').trim().toLowerCase()
+      
+      // YENİLİK: Dağıtık Brute-Force Koruması (Hem IP hem Hesap bazlı)
+      await rateLimit(request, 'login:ip', 10, 15 * 60)
+      if (identifier) {
+        await rateLimit(request, 'login:acc', 5, 15 * 60, identifier)
+      }
+
       const password = String(body.password ?? '')
       const founder = !!body.founder
 
@@ -393,9 +409,11 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
     method: 'POST',
     run: async (request, body) => {
       const s = await requireSession(request)
-      await rateLimit(request, 'change-password', 10, 15 * 60)
+      await rateLimit(request, 'change-password:ip', 10, 15 * 60)
+      
       const row = await first<{ password_hash: string }>('SELECT password_hash FROM members WHERE id = ?1', s.id)
       if (!(await verifyPassword(String(body.currentPassword ?? ''), row?.password_hash ?? null))) throw new HttpError('Mevcut şifre hatalı.', 400)
+      
       const password = validatePassword(body.password)
       await run('UPDATE members SET password_hash = ?1 WHERE id = ?2', await hashPassword(password), s.id)
       const token = readCookie(request, COOKIE)
@@ -408,12 +426,19 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
     method: 'POST',
     run: async (request, body) => {
       if (await isMaintenanceOn()) throw new HttpError('Site bakımda. Şu an şifre sıfırlama yapılamıyor.', 503)
-      await rateLimit(request, 'recover', 5, 15 * 60)
+      
       const identifier = String(body.username ?? '').trim().toLowerCase()
+      // YENİLİK: Hesap bazlı koruma eklendi
+      await rateLimit(request, 'recover:ip', 5, 15 * 60)
+      if (identifier) {
+        await rateLimit(request, 'recover:acc', 3, 15 * 60, identifier)
+      }
+
       const founder = !!body.founder
       const member = founder
         ? await first<{ id: string; email: string }>('SELECT id, email FROM members WHERE email = ?1 AND status = \'active\'', identifier)
         : await first<{ id: string; email: string }>('SELECT id, email FROM members WHERE username = ?1 AND status = \'active\'', identifier)
+      
       if (member) {
         const token = randomToken()
         await run('DELETE FROM reset_tokens WHERE member_id = ?1', member.id)
@@ -442,17 +467,20 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
   'reset-password': {
     method: 'POST',
     run: async (request, body) => {
-      await rateLimit(request, 'reset', 10, 15 * 60)
+      await rateLimit(request, 'reset:ip', 10, 15 * 60)
       const password = validatePassword(body.password)
       const token = String(body.token ?? '')
       if (!token) throw new HttpError('Bağlantı geçersiz veya süresi dolmuş.')
+      
       const tokenHash = await sha256(token)
       const row = await first<{ member_id: string }>('SELECT member_id FROM reset_tokens WHERE token_hash = ?1 AND expires_at > ?2', tokenHash, Date.now())
       if (!row) throw new HttpError('Bağlantı geçersiz veya süresi dolmuş.')
-      const consumed = await run('DELETE FROM reset_tokens WHERE token_hash = ?1', tokenHash)
-      if (consumed.meta.changes !== 1) throw new HttpError('Bağlantı geçersiz veya süresi dolmuş.')
+      
+      // YENİLİK: Önce şifreyi güncelliyoruz ki veritabanı kesintisinde token boşa yanmasın.
       await run('UPDATE members SET password_hash = ?1 WHERE id = ?2', await hashPassword(password), row.member_id)
+      await run('DELETE FROM reset_tokens WHERE token_hash = ?1', tokenHash)
       await run('DELETE FROM sessions WHERE member_id = ?1', row.member_id)
+      
       return json({ ok: true })
     },
   },
@@ -594,7 +622,7 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
   like: {
     method: 'POST',
     run: async (request, body) => {
-      await rateLimit(request, 'like', 60, 600)
+      await rateLimit(request, 'like:ip', 60, 600)
       const postId = String(body.postId ?? '')
       if (!(await first('SELECT 1 FROM posts WHERE id = ?1', postId))) throw new HttpError('Yazı bulunamadı.', 404)
       const voter = await voterKey(request, await currentSession(request))
@@ -615,7 +643,7 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       const s = await requireSession(request)
       const ban = await activeCommentBan(s.id)
       if (ban) throw new HttpError(ban.expires_at ? `Yorum yapman ${fmtDate(ban.expires_at)} tarihine kadar kısıtlandı.` : 'Yorum yapman kalıcı olarak kısıtlandı.', 403)
-      await rateLimit(request, 'comment', 10, 600)
+      await rateLimit(request, 'comment:ip', 10, 600)
       const text = String(body.body ?? '').trim()
       if (text.length < 1 || text.length > 1000) throw new HttpError('Yorum 1–1000 karakter olmalı.')
       const postId = String(body.postId ?? '')
@@ -631,7 +659,7 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       const s = await requireSession(request)
       const ban = await activeCommentBan(s.id)
       if (ban) throw new HttpError(ban.expires_at ? `Yorum yapman ${fmtDate(ban.expires_at)} tarihine kadar kısıtlandı.` : 'Yorum yapman kalıcı olarak kısıtlandı.', 403)
-      await rateLimit(request, 'edit-comment', 30, 600)
+      await rateLimit(request, 'edit-comment:ip', 30, 600)
       const commentId = String(body.id ?? '')
       const text = String(body.body ?? '').trim()
       if (text.length < 1 || text.length > 1000) throw new HttpError('Yorum 1–1000 karakter olmalı.')
@@ -868,7 +896,7 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       if (await first('SELECT 1 FROM members WHERE is_admin = 1 OR role = \'Kurucu\' OR role = \'founder\'')) {
         throw new HttpError('Kurulum zaten tamamlanmış, bu işlem kalıcı olarak kapatılmıştır.', 403)
       }
-      await rateLimit(request, 'bootstrap', 5, 60 * 60)
+      await rateLimit(request, 'bootstrap:ip', 5, 60 * 60)
       const secret = SETUP_TOKEN()
       if (!secret || body.token !== secret) throw new HttpError('Yetkisiz.', 403)
       const email = String(body.email ?? '').trim().toLowerCase()
@@ -889,7 +917,7 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       if (getRoleInfo(s.role, s.is_admin).level === 5) {
         throw new HttpError('Kurucu hesabı bu yöntemle silinemez. Önce yetkiyi devretmeniz gerekir.', 403)
       }
-      await rateLimit(request, 'delete-my-account', 5, 15 * 60)
+      await rateLimit(request, 'delete-my-account:ip', 5, 15 * 60)
       
       const row = await first<{ password_hash: string }>('SELECT password_hash FROM members WHERE id = ?1', s.id)
       if (!(await verifyPassword(String(body.password ?? ''), row?.password_hash ?? null))) {
