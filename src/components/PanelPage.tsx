@@ -270,7 +270,6 @@ export function PanelPage({ adminOnly = false }: { adminOnly?: boolean }) {
                     <PasswordSettings />
                   </div>
                   
-                  {/* Hesabımı Sil Alanı */}
                   <div style={{ marginTop: 22 }}>
                     <DeleteAccountSettings 
                       isFounder={session.profile.role === 'Kurucu'} 
@@ -550,9 +549,12 @@ function MemberManager({ members, refresh, session }: { members: Member[]; refre
   const [notice, setNotice] = useState('')
   const [copyStatus, setCopyStatus] = useState('')
 
+  // YENİLİK (ADIM 8 - KULLANICI SAYFALAMASI): Sayfa Başına 10 Hesap
+  const [page, setPage] = useState(1)
+  const pageSize = 10
+
   const isFounder = session?.profile.role === 'Kurucu'
 
-  // 5 saniyelik silme geri sayım sayacı
   useEffect(() => {
     if (!deletingMember) return
     setCountdown(5)
@@ -567,6 +569,11 @@ function MemberManager({ members, refresh, session }: { members: Member[]; refre
     }, 1000)
     return () => clearInterval(timer)
   }, [deletingMember])
+
+  // Arama değiştiğinde sayfayı otomatik 1'e alıyoruz
+  useEffect(() => {
+    setPage(1)
+  }, [search])
 
   async function invite(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -640,6 +647,10 @@ function MemberManager({ members, refresh, session }: { members: Member[]; refre
   const filteredMembers = q
     ? members.filter(m => m.username.toLowerCase().includes(q) || m.email.toLowerCase().includes(q))
     : members
+
+  // Sayfalama Hesaplamaları
+  const totalPages = Math.max(1, Math.ceil(filteredMembers.length / pageSize))
+  const paginatedMembers = filteredMembers.slice((page - 1) * pageSize, page * pageSize)
 
   return (
     <>
@@ -717,7 +728,6 @@ function MemberManager({ members, refresh, session }: { members: Member[]; refre
           </div>
         )}
 
-        {/* Temizleme Butonlu Arama Çubuğu */}
         <div className="members-search" style={{ position: 'relative' }}>
           <input
             type="text"
@@ -766,7 +776,7 @@ function MemberManager({ members, refresh, session }: { members: Member[]; refre
                   </td>
                 </tr>
               ) : (
-                filteredMembers.map(member => {
+                paginatedMembers.map(member => {
                   const isSelf = member.id === session?.profile.id
                   const isTargetAdminOrFounder = member.role === 'Admin' || member.role === 'Kurucu'
                   const cannotChange = busy || isSelf || (!isFounder && isTargetAdminOrFounder)
@@ -874,9 +884,37 @@ function MemberManager({ members, refresh, session }: { members: Member[]; refre
             </tbody>
           </table>
         </div>
+
+        {/* YENİLİK (ADIM 8): TABLO ALTI KLASİK SAYFALAMA KONTROLLERİ */}
+        {totalPages > 1 && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--line)', fontSize: '11px', flexWrap: 'wrap', gap: 10 }}>
+            <span style={{ color: '#7a886b' }}>
+              Sayfa <strong>{page}</strong> / <strong>{totalPages}</strong> (Toplam {filteredMembers.length} hesap)
+            </span>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                className="button button-outline"
+                style={{ padding: '6px 14px', fontSize: '11px' }}
+                disabled={page <= 1}
+                onClick={() => setPage(p => p - 1)}
+              >
+                « Önceki
+              </button>
+              <button
+                type="button"
+                className="button button-outline"
+                style={{ padding: '6px 14px', fontSize: '11px' }}
+                disabled={page >= totalPages}
+                onClick={() => setPage(p => p + 1)}
+              >
+                Sonraki »
+              </button>
+            </div>
+          </div>
+        )}
       </section>
 
-      {/* Askıya Alma / Askı Kaldırma Onay Penceresi (Modal) */}
       {suspendingMember && (
         <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-suspend-title">
           <div className="modal-content">
@@ -885,24 +923,13 @@ function MemberManager({ members, refresh, session }: { members: Member[]; refre
             </h3>
             <p>
               {suspendingMember.status === 'suspended' ? (
-                <>
-                  Kullanıcı adı <strong>{suspendingMember.username}</strong> olan hesabın askısını kaldırmak istediğinize emin misiniz? Kullanıcı siteye tekrar sorunsuz giriş yapabilecektir.
-                </>
+                <>Kullanıcı adı <strong>{suspendingMember.username}</strong> olan hesabın askısını kaldırmak istediğinize emin misiniz? Kullanıcı siteye tekrar sorunsuz giriş yapabilecektir.</>
               ) : (
-                <>
-                  Kullanıcı adı <strong>{suspendingMember.username}</strong> olan hesabı askıya almak istediğinize emin misiniz? Kullanıcının tüm açık oturumları anında sonlandırılacak ve siteye girişi engellenecektir.
-                </>
+                <>Kullanıcı adı <strong>{suspendingMember.username}</strong> olan hesabı askıya almak istediğinize emin misiniz? Kullanıcının tüm açık oturumları anında sonlandırılacak ve siteye girişi engellenecektir.</>
               )}
             </p>
             <div className="modal-actions">
-              <button
-                type="button"
-                className="modal-btn-cancel"
-                disabled={busy}
-                onClick={() => setSuspendingMember(null)}
-              >
-                Vazgeç
-              </button>
+              <button type="button" className="modal-btn-cancel" disabled={busy} onClick={() => setSuspendingMember(null)}>Vazgeç</button>
               <button
                 type="button"
                 className={suspendingMember.status === 'suspended' ? 'button button-primary' : 'modal-btn-danger'}
@@ -917,7 +944,6 @@ function MemberManager({ members, refresh, session }: { members: Member[]; refre
         </div>
       )}
 
-      {/* 5 Saniyelik Silme Onay Penceresi (Modal) */}
       {deletingMember && (
         <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-del-title">
           <div className="modal-content">
@@ -926,14 +952,7 @@ function MemberManager({ members, refresh, session }: { members: Member[]; refre
               Kullanıcı adı <strong>{deletingMember.username}</strong> olan {deletingMember.status === 'pending' ? 'bekleyen daveti ve hesabı' : 'kullanıcıyı'} silmek istiyor musun? Bu işlem geri alınamaz; kullanıcıya ait tüm oturumlar, varsa yorumlar, beğeniler ve davet kodları kalıcı olarak silinecektir.
             </p>
             <div className="modal-actions">
-              <button
-                type="button"
-                className="modal-btn-cancel"
-                disabled={busy}
-                onClick={() => setDeletingMember(null)}
-              >
-                Vazgeç
-              </button>
+              <button type="button" className="modal-btn-cancel" disabled={busy} onClick={() => setDeletingMember(null)}>Vazgeç</button>
               <button
                 type="button"
                 className="modal-btn-danger"
@@ -1196,4 +1215,4 @@ function UpdateManager() {
       </section>
     </div>
   )
-        }
+            }
