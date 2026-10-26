@@ -57,7 +57,26 @@ const first = <T>(sql: string, ...args: unknown[]) => DB().prepare(sql).bind(...
 const all = async <T>(sql: string, ...args: unknown[]) => (await DB().prepare(sql).bind(...args).all<T>()).results
 const run = (sql: string, ...args: unknown[]) => DB().prepare(sql).bind(...args).run()
 
-// YENİLİK: Hem IP bazlı hem de Hesap bazlı kısıtlama için güncellendi
+// ADIM 7: ÇÖP VERİ TEMİZLEME (GARBAGE COLLECTION)
+let lastCleanupTime = 0
+async function cleanExpiredRecords() {
+  const now = Date.now()
+  if (now - lastCleanupTime < 60 * 60 * 1000) return
+  lastCleanupTime = now
+
+  try {
+    await DB().batch([
+      DB().prepare('DELETE FROM sessions WHERE expires_at < ?1').bind(now),
+      DB().prepare('DELETE FROM reset_tokens WHERE expires_at < ?1').bind(now),
+      DB().prepare('DELETE FROM activation_codes WHERE expires_at < ?1 OR (used_at IS NOT NULL AND used_at < ?2)').bind(now, now - 7 * 24 * 60 * 60 * 1000),
+      DB().prepare('DELETE FROM rate_limits WHERE reset_at < ?1').bind(now),
+      DB().prepare('DELETE FROM bans WHERE expires_at IS NOT NULL AND expires_at < ?1').bind(now),
+    ])
+  } catch (err) {
+    console.error('Otomatik çöp temizleme hatası:', err)
+  }
+}
+
 async function rateLimit(request: Request, bucket: string, max: number, windowSec: number, identifier?: string) {
   const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown'
   const key = identifier ? `${bucket}:${identifier}` : `${bucket}:${ip}`
@@ -191,6 +210,23 @@ const queryParam = (request: Request, name: string) => new URL(request.url).sear
 type Handler = (request: Request, body: any) => Promise<Response>
 
 const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
+  // Manuel tetiklenebilen temizleme endpoint'i
+  cleanup: {
+    method: 'POST',
+    run: async request => {
+      await requireRole(request, 4)
+      const now = Date.now()
+      await DB().batch([
+        DB().prepare('DELETE FROM sessions WHERE expires_at < ?1').bind(now),
+        DB().prepare('DELETE FROM reset_tokens WHERE expires_at < ?1').bind(now),
+        DB().prepare('DELETE FROM activation_codes WHERE expires_at < ?1 OR (used_at IS NOT NULL AND used_at < ?2)').bind(now, now - 7 * 24 * 60 * 60 * 1000),
+        DB().prepare('DELETE FROM rate_limits WHERE reset_at < ?1').bind(now),
+        DB().prepare('DELETE FROM bans WHERE expires_at IS NOT NULL AND expires_at < ?1').bind(now),
+      ])
+      return json({ ok: true, message: 'Tüm süresi dolmuş çöp kayıtlar başarıyla temizlendi.' })
+    },
+  },
+
   developers: {
     method: 'GET',
     run: async () => json(
@@ -353,11 +389,7 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       const { member_id, username, hash } = await findValidCode(body.code)
       const passwordHash = await hashPassword(password)
       
-      // YENİLİK: İşlem Bütünlüğü (Atomicity) Koruması
-      // Hata ihtimaline karşı ÖNCE şifreyi ve durumu güncelliyoruz, kod yanmıyor.
       await run('UPDATE members SET password_hash = ?1, status = \'active\', is_suspended = 0 WHERE id = ?2', passwordHash, member_id)
-      
-      // Şifre güncellendiği için artık üye 'active' durumundadır. Kod başarıyla kullanıldı olarak işaretleniyor.
       await run('UPDATE activation_codes SET used_at = ?1 WHERE code_hash = ?2', Date.now(), hash)
       
       return json({ username })
@@ -369,7 +401,6 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
     run: async (request, body) => {
       const identifier = String(body.username ?? '').trim().toLowerCase()
       
-      // YENİLİK: Dağıtık Brute-Force Koruması (Hem IP hem Hesap bazlı)
       await rateLimit(request, 'login:ip', 10, 15 * 60)
       if (identifier) {
         await rateLimit(request, 'login:acc', 5, 15 * 60, identifier)
@@ -428,7 +459,6 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       if (await isMaintenanceOn()) throw new HttpError('Site bakımda. Şu an şifre sıfırlama yapılamıyor.', 503)
       
       const identifier = String(body.username ?? '').trim().toLowerCase()
-      // YENİLİK: Hesap bazlı koruma eklendi
       await rateLimit(request, 'recover:ip', 5, 15 * 60)
       if (identifier) {
         await rateLimit(request, 'recover:acc', 3, 15 * 60, identifier)
@@ -476,7 +506,6 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       const row = await first<{ member_id: string }>('SELECT member_id FROM reset_tokens WHERE token_hash = ?1 AND expires_at > ?2', tokenHash, Date.now())
       if (!row) throw new HttpError('Bağlantı geçersiz veya süresi dolmuş.')
       
-      // YENİLİK: Önce şifreyi güncelliyoruz ki veritabanı kesintisinde token boşa yanmasın.
       await run('UPDATE members SET password_hash = ?1 WHERE id = ?2', await hashPassword(password), row.member_id)
       await run('DELETE FROM reset_tokens WHERE token_hash = ?1', tokenHash)
       await run('DELETE FROM sessions WHERE member_id = ?1', row.member_id)
@@ -943,6 +972,9 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
 
 async function handle(request: Request, action: string) {
   try {
+    // Gelen her istekte sessizce saatlik çöp temizleme kontrolünü tetikliyoruz
+    void cleanExpiredRecords()
+
     const entry = Object.hasOwn(actions, action) ? actions[action] : undefined
     if (!entry || entry.method !== request.method) throw new HttpError('Bulunamadı.', 404)
     if (await isIpBanned(await ipHashOf(request))) {
