@@ -246,6 +246,10 @@ export function PanelPage({ adminOnly = false }: { adminOnly?: boolean }) {
                       <StatCard label="Aktif hesaplar" value={members.filter(member => member.status === 'active').length} icon={<Users size={20} />} />
                       <StatCard label="Aktivasyon bekleyenler" value={members.filter(member => member.status === 'pending').length} icon={<KeyRound size={20} />} />
                     </div>
+
+                    {/* YENİLİK (ADIM 10): ADMİN PANELİ 2FA AYAR KARTI */}
+                    <TwoFactorSettings />
+
                     <div className="panel-section-title">
                       <h2>Geliştirici panosu</h2>
                       <button type="button" className="text-action" onClick={() => setTab('developers')}>Panoyu düzenle <ArrowUpRight size={16} /></button>
@@ -269,6 +273,9 @@ export function PanelPage({ adminOnly = false }: { adminOnly?: boolean }) {
                     </section>
                     <PasswordSettings />
                   </div>
+
+                  {/* KULLANICI ALANINDA DA ADMİN İSE 2FA GÖRÜNÜR */}
+                  {session.isAdmin && <TwoFactorSettings />}
                   
                   <div style={{ marginTop: 22 }}>
                     <DeleteAccountSettings 
@@ -315,6 +322,221 @@ function StatCard({ label, value, icon }: { label: string; value: number; icon: 
       <strong>{String(value).padStart(2, '0')}</strong>
       <span>Güncel kayıtlar</span>
     </article>
+  )
+}
+
+// YENİLİK (ADIM 10): GOOGLE AUTHENTICATOR (2FA) YÖNETİM BİLEŞENİ
+function TwoFactorSettings() {
+  const [enabled, setEnabled] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [setupMode, setSetupMode] = useState(false)
+  const [secret, setSecret] = useState('')
+  const [code, setCode] = useState('')
+  const [password, setPassword] = useState('')
+  const [disabling, setDisabling] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const [username, setUsername] = useState('')
+  const [copyStatus, setCopyStatus] = useState('')
+
+  useEffect(() => {
+    communityApi<{ enabled: boolean; username: string }>('2fa-status')
+      .then(res => {
+        setEnabled(res.enabled)
+        setUsername(res.username)
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  function startSetup() {
+    setError('')
+    setNotice('')
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
+    const newSecret = Array.from(crypto.getRandomValues(new Uint8Array(20)), b => alphabet[b % 32]).join('')
+    setSecret(newSecret)
+    setCode('')
+    setSetupMode(true)
+  }
+
+  async function handleVerify(e: FormEvent) {
+    e.preventDefault()
+    setBusy(true)
+    setError('')
+    try {
+      await communityApi('setup-2fa', { secret, code })
+      setEnabled(true)
+      setSetupMode(false)
+      setNotice('İki Adımlı Doğrulama başarıyla aktifleştirildi!')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Kod doğrulanamadı.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleDisable(e: FormEvent) {
+    e.preventDefault()
+    setBusy(true)
+    setError('')
+    try {
+      await communityApi('disable-2fa', { password })
+      setEnabled(false)
+      setDisabling(false)
+      setPassword('')
+      setNotice('2FA başarıyla devre dışı bırakıldı.')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Şifre hatalı.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function copySecret() {
+    try {
+      await navigator.clipboard.writeText(secret)
+      setCopyStatus('Anahtar kopyalandı!')
+      setTimeout(() => setCopyStatus(''), 2500)
+    } catch {
+      setCopyStatus('Kopyalanamadı.')
+    }
+  }
+
+  if (loading) return null
+
+  const otpUrl = `otpauth://totp/SemihAlgan:${username || 'admin'}?secret=${secret}&issuer=SemihAlgan`
+
+  return (
+    <section className="panel-card" style={{ marginTop: 22 }}>
+      <span className="panel-card-icon" style={{ background: enabled ? '#edf4e4' : '#edf2e1', color: enabled ? '#4c7040' : '#61814e' }}>
+        <ShieldCheck size={21} />
+      </span>
+      <h2>İki Adımlı Doğrulama (2FA)</h2>
+      <p className="card-description">
+        {enabled
+          ? 'Hesabınız Google Authenticator ile korunuyor. Giriş yaparken şifrenize ek olarak 6 haneli kod istenir.'
+          : 'Google Authenticator ile hesabınıza 30 saniyede bir değişen ekstra güvenlik kodu koruması ekleyin.'}
+      </p>
+
+      {error && <p className="message message-error" style={{ marginTop: 14 }}>{error}</p>}
+      {notice && <p className="message message-success" style={{ marginTop: 14 }}>{notice}</p>}
+
+      {enabled ? (
+        <div style={{ marginTop: 18 }}>
+          <span className="account-state active" style={{ display: 'inline-flex', marginBottom: 14 }}>
+            <Check size={12} /> 2FA Aktif ve Korunuyor
+          </span>
+          <br />
+          {!disabling ? (
+            <button
+              type="button"
+              className="danger-button"
+              style={{ padding: '8px 14px' }}
+              onClick={() => { setDisabling(true); setError(''); setNotice(''); }}
+            >
+              2FA'yı Devre Dışı Bırak
+            </button>
+          ) : (
+            <form onSubmit={handleDisable} style={{ marginTop: 12, maxWidth: 360 }}>
+              <p style={{ fontSize: '11px', color: '#974d34', marginBottom: 8 }}>
+                Devre dışı bırakmak için mevcut hesap şifrenizi girin:
+              </p>
+              <input
+                type="password"
+                required
+                placeholder="Hesap şifreniz"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                style={{ width: '100%', marginBottom: 10, height: 40, padding: '0 10px', borderRadius: 6, border: '1px solid var(--line)', font: 'inherit', fontSize: '12px' }}
+              />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="submit" disabled={busy} className="danger-button">
+                  {busy ? 'Kaldırılıyor…' : 'Kaldır'}
+                </button>
+                <button type="button" disabled={busy} className="button button-outline" style={{ padding: '6px 12px', fontSize: '11px' }} onClick={() => setDisabling(false)}>
+                  Vazgeç
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      ) : !setupMode ? (
+        <button
+          type="button"
+          className="button button-primary"
+          style={{ marginTop: 16 }}
+          onClick={startSetup}
+        >
+          2FA Kurulumunu Başlat <ArrowUpRight size={16} />
+        </button>
+      ) : (
+        <div style={{ marginTop: 16, background: '#fafbf6', border: '1px solid var(--line)', borderRadius: 10, padding: 18 }}>
+          <h3 style={{ fontSize: '14px', marginBottom: 8, fontWeight: 700 }}>Google Authenticator Kurulumu</h3>
+          <p style={{ fontSize: '11px', lineHeight: 1.6, color: 'var(--muted)', marginBottom: 12 }}>
+            Aşağıdaki butona tıklayarak doğrudan Authenticator uygulamanıza ekleyebilir veya gizli anahtarı elle girebilirsiniz:
+          </p>
+
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
+            <a
+              href={otpUrl}
+              className="button button-primary"
+              style={{ padding: '8px 16px', fontSize: '11px' }}
+            >
+              Authenticator Uygulamasında Aç
+            </a>
+            <button
+              type="button"
+              className="button button-outline"
+              style={{ padding: '8px 14px', fontSize: '11px' }}
+              onClick={copySecret}
+            >
+              {copyStatus || 'Anahtarı Kopyala'} <Copy size={13} />
+            </button>
+          </div>
+
+          <div style={{ padding: 10, background: '#f0f3e7', borderRadius: 6, marginBottom: 16 }}>
+            <span style={{ fontSize: '10px', color: '#68785e', display: 'block', marginBottom: 4 }}>Kurulum Anahtarı (Elle Giriş İçin):</span>
+            <code style={{ fontSize: '13px', fontWeight: 700, letterSpacing: '1px', wordBreak: 'break-all' }}>{secret}</code>
+          </div>
+
+          <form onSubmit={handleVerify}>
+            <label htmlFor="totp-test" style={{ fontSize: '11px', fontWeight: 600, display: 'block', marginBottom: 6 }}>
+              Uygulamada Görünen 6 Haneli Kodu Girin:
+            </label>
+            <div style={{ display: 'flex', gap: 10, maxWidth: 300 }}>
+              <input
+                id="totp-test"
+                type="text"
+                required
+                maxLength={6}
+                inputMode="numeric"
+                value={code}
+                onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="123456"
+                style={{ flex: 1, height: 42, textAlign: 'center', fontSize: '16px', fontWeight: 700, letterSpacing: '3px', borderRadius: 6, border: '1px solid var(--line)' }}
+              />
+              <button
+                type="submit"
+                disabled={busy || code.length !== 6}
+                className="button button-primary"
+                style={{ padding: '0 16px' }}
+              >
+                {busy ? 'Doğrulanıyor…' : 'Aktif Et'}
+              </button>
+            </div>
+            <button
+              type="button"
+              className="text-action"
+              style={{ marginTop: 12, fontSize: '11px' }}
+              onClick={() => setSetupMode(false)}
+            >
+              <X size={13} /> Kurulumu İptal Et
+            </button>
+          </form>
+        </div>
+      )}
+    </section>
   )
 }
 
@@ -549,7 +771,6 @@ function MemberManager({ members, refresh, session }: { members: Member[]; refre
   const [notice, setNotice] = useState('')
   const [copyStatus, setCopyStatus] = useState('')
 
-  // YENİLİK (ADIM 8 - KULLANICI SAYFALAMASI): Sayfa Başına 10 Hesap
   const [page, setPage] = useState(1)
   const pageSize = 10
 
@@ -570,7 +791,6 @@ function MemberManager({ members, refresh, session }: { members: Member[]; refre
     return () => clearInterval(timer)
   }, [deletingMember])
 
-  // Arama değiştiğinde sayfayı otomatik 1'e alıyoruz
   useEffect(() => {
     setPage(1)
   }, [search])
@@ -648,7 +868,6 @@ function MemberManager({ members, refresh, session }: { members: Member[]; refre
     ? members.filter(m => m.username.toLowerCase().includes(q) || m.email.toLowerCase().includes(q))
     : members
 
-  // Sayfalama Hesaplamaları
   const totalPages = Math.max(1, Math.ceil(filteredMembers.length / pageSize))
   const paginatedMembers = filteredMembers.slice((page - 1) * pageSize, page * pageSize)
 
@@ -885,7 +1104,6 @@ function MemberManager({ members, refresh, session }: { members: Member[]; refre
           </table>
         </div>
 
-        {/* YENİLİK (ADIM 8): TABLO ALTI KLASİK SAYFALAMA KONTROLLERİ */}
         {totalPages > 1 && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--line)', fontSize: '11px', flexWrap: 'wrap', gap: 10 }}>
             <span style={{ color: '#7a886b' }}>
