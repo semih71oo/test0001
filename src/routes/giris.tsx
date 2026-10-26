@@ -14,7 +14,8 @@ export const Route = createFileRoute('/giris')({
   }),
 })
 
-type AuthStep = 'login' | 'code' | 'password' | 'recovery' | 'forgot'
+// YENİLİK: '2fa' adımı eklendi
+type AuthStep = 'login' | 'code' | 'password' | 'recovery' | 'forgot' | '2fa'
 
 function PasswordField({
   id,
@@ -72,6 +73,7 @@ function LoginPage() {
   const [password, setPassword] = useState('')
   const [confirmation, setConfirmation] = useState('')
   const [resetToken, setResetToken] = useState('')
+  const [twoFactorCode, setTwoFactorCode] = useState('')
   const [busy, setBusy] = useState(false)
   const [callbackBusy, setCallbackBusy] = useState(true)
   const [error, setError] = useState('')
@@ -97,6 +99,7 @@ function LoginPage() {
     setNotice('')
     setPassword('')
     setConfirmation('')
+    setTwoFactorCode('')
     if (next !== 'password') setCode('')
     if (next !== 'code' && next !== 'password') {
       setAcceptTerms(false)
@@ -119,7 +122,17 @@ function LoginPage() {
     setBusy(true)
     try {
       if (step === 'login') {
-        await communityApi('login', { username, password, founder })
+        const res = await communityApi<{ ok?: boolean; requires2FA?: boolean }>('login', { username, password, founder })
+        // YENİLİK: Yönetici hesabında 2FA aktifse 6 haneli kod ekranına geç
+        if (res.requires2FA) {
+          setStep('2fa')
+          setNotice('Yönetici hesabınız için Google Authenticator güvenlik kodu gerekiyor.')
+          return
+        }
+        window.location.assign('/panel')
+      } else if (step === '2fa') {
+        // 2FA KODUNU ŞİFRE VE KULLANICI ADIYLA BİRLİKTE DOĞRULUYORUZ
+        await communityApi('login', { username, password, founder, twoFactorCode })
         window.location.assign('/panel')
       } else if (step === 'code') {
         const result = await communityApi<{ username: string }>('check-code', { code })
@@ -149,7 +162,8 @@ function LoginPage() {
       )
     } finally {
       setBusy(false)
-      if (step !== 'code' && step !== 'forgot') {
+      // 2FA aşamasındayken şifreyi silmiyoruz ki 2FA kodunu gönderirken şifre kaybolmasın
+      if (step === 'password' || step === 'recovery') {
         setPassword('')
         setConfirmation('')
       }
@@ -162,6 +176,7 @@ function LoginPage() {
     password: 'Sana özel bir başlangıç.',
     recovery: 'Yeni bir şifre.',
     forgot: 'Kaldığın yerden devam et.',
+    '2fa': 'İki Adımlı Doğrulama',
   }
 
   const descriptions: Record<AuthStep, string> = {
@@ -170,6 +185,7 @@ function LoginPage() {
     password: `${username} hesabın için en az 12 karakterlik güçlü bir şifre oluştur.`,
     recovery: 'Hesabın için en az 12 karakterlik yeni bir şifre belirle.',
     forgot: 'Kullanıcı adını gir. Şifre sıfırlama bağlantısını kayıtlı e-posta adresine gönderelim.',
+    '2fa': 'Google Authenticator uygulamasındaki 6 haneli geçici güvenlik kodunu girin.',
   }
 
   return (
@@ -221,10 +237,10 @@ function LoginPage() {
         <section className="auth-card" aria-labelledby="auth-title">
           <div className="auth-card-top">
             <span className="auth-symbol">
-              {step === 'code' ? <KeyRound size={23} /> : <LockKeyhole size={23} />}
+              {step === 'code' ? <KeyRound size={23} /> : step === '2fa' ? <ShieldCheck size={23} /> : <LockKeyhole size={23} />}
             </span>
             <span className="small-label">
-              {step === 'login' ? 'HESABINA GİRİŞ YAP' : step === 'forgot' ? 'ŞİFRE YENİLEME' : 'HESABINI HAZIRLA'}
+              {step === 'login' ? 'HESABINA GİRİŞ YAP' : step === 'forgot' ? 'ŞİFRE YENİLEME' : step === '2fa' ? 'GÜVENLİK DOĞRULAMASI' : 'HESABINI HAZIRLA'}
             </span>
           </div>
           <h2 id="auth-title">{titles[step]}</h2>
@@ -280,7 +296,28 @@ function LoginPage() {
                 </div>
               )}
 
-              {step !== 'code' && step !== 'forgot' && (
+              {/* YENİLİK: 2FA 6 HANELİ DOĞRULAMA KODU KUTUSU */}
+              {step === '2fa' && (
+                <div className="form-field">
+                  <label htmlFor="twoFactorCode">6 Haneli Güvenlik Kodu</label>
+                  <input
+                    id="twoFactorCode"
+                    name="twoFactorCode"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    value={twoFactorCode}
+                    onChange={event => setTwoFactorCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                    required
+                    maxLength={6}
+                    placeholder="123456"
+                    style={{ letterSpacing: '4px', textAlign: 'center', fontSize: '18px', fontWeight: 700 }}
+                  />
+                  <span className="field-hint">Authenticator uygulamasındaki anlık 6 haneli kodu yazın.</span>
+                </div>
+              )}
+
+              {step !== 'code' && step !== 'forgot' && step !== '2fa' && (
                 <PasswordField
                   id="password"
                   label={step === 'login' ? 'Şifre' : 'Yeni şifre'}
@@ -388,13 +425,15 @@ function LoginPage() {
                     ? 'İşlem yapılıyor…'
                     : step === 'login'
                       ? 'Giriş yap'
-                      : step === 'code'
-                        ? 'Kodu doğrula'
-                        : step === 'forgot'
-                          ? 'Sıfırlama bağlantısı gönder'
-                          : step === 'recovery'
-                            ? 'Şifreyi güncelle'
-                            : 'Şifremi oluştur'}
+                      : step === '2fa'
+                        ? 'Doğrula ve Giriş Yap'
+                        : step === 'code'
+                          ? 'Kodu doğrula'
+                          : step === 'forgot'
+                            ? 'Sıfırlama bağlantısı gönder'
+                            : step === 'recovery'
+                              ? 'Şifreyi güncelle'
+                              : 'Şifremi oluştur'}
                 <ArrowRight size={18} />
               </button>
             </fieldset>
