@@ -13,9 +13,15 @@ import 'highlight.js/styles/github.css'
 export const Route = createFileRoute('/yazilar/$id')({
   loader: async ({ params }) => {
     try {
-      const baseUrl = import.meta.env.SSR ? 'https://semihalgan.com.tr' : ''
-      const res = await fetch(`${baseUrl}/api/community/post?id=${encodeURIComponent(params.id)}`, { cache: 'no-store' })
-      
+      // SSR: sunucuda kendi adresine HTTP isteği atmak Worker içinde çalışmaz (ve "cache" seçeneği desteklenmez);
+      // bu yüzden veri doğrudan D1'den okunur. Bu dal tarayıcı paketine dahil edilmez.
+      if (import.meta.env.SSR) {
+        const { getPublicPost } = await import('../server/public-post')
+        return await getPublicPost(params.id)
+      }
+
+      // Tarayıcı: sayfa içi geçişlerde API'den (çerezle birlikte) okunur
+      const res = await fetch(`/api/community/post?id=${encodeURIComponent(params.id)}`, { cache: 'no-store' })
       if (!res.ok) {
         if (res.status === 404) return { post: null, error: 'missing' }
         throw new Error('Yazı yüklenemedi')
@@ -23,6 +29,7 @@ export const Route = createFileRoute('/yazilar/$id')({
       const post = await res.json()
       return { post, error: null }
     } catch (caught) {
+      console.error('Yazı yüklenemedi:', caught)
       return { post: null, error: 'error' }
     }
   },
