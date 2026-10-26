@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import type { FormEvent } from 'react'
 import { Check, Heart, Pencil, Send, Trash2, X } from 'lucide-react'
 import { PublicShell } from '../components/PublicShell'
@@ -7,11 +7,13 @@ import { communityApi } from '../lib/community'
 import { formatDate, imageUrl } from '../lib/posts'
 import type { PostDetail } from '../lib/posts'
 
+// Kod renklendirme (Syntax Highlighting) için Highlight.js ve temasını içe aktarıyoruz
+import hljs from 'highlight.js'
+import 'highlight.js/styles/github.css'
+
 export const Route = createFileRoute('/yazilar/$id')({
-  // ssr: false KALDIRILDI! Artık sayfa sunucuda render edilerek botlara sunulacak.
   loader: async ({ params }) => {
     try {
-      // Sunucuda (SSR) çalışırken relative URL çalışmaz, absolute URL gerekir.
       const baseUrl = import.meta.env.SSR ? 'https://semihalgan.com.tr' : ''
       const res = await fetch(`${baseUrl}/api/community/post?id=${encodeURIComponent(params.id)}`, { cache: 'no-store' })
       
@@ -31,28 +33,22 @@ export const Route = createFileRoute('/yazilar/$id')({
     const post = loaderData.post
     const siteUrl = 'https://semihalgan.com.tr'
     
-    // Yazıya ait görsel varsa o, yoksa varsayılan og-image.png (Sosyal medya önizleme resmi)
     const ogImage = post.hasImage 
       ? `${siteUrl}/api/community/post-image?id=${post.id}&v=${post.updatedAt}` 
       : `${siteUrl}/og-image.png`
     
-    // SEO ve paylaşım kartları için temizlenmiş kısa açıklama (155 karakter)
     const cleanDescription = post.body.replace(/\s+/g, ' ').substring(0, 155) + '...'
 
     return {
       meta: [
         { title: `${post.title} — Semih Algan` },
         { name: 'description', content: cleanDescription },
-        
-        // OpenGraph / Sosyal Medya (WhatsApp, LinkedIn, vb.)
         { property: 'og:title', content: `${post.title} — Semih Algan` },
         { property: 'og:description', content: cleanDescription },
         { property: 'og:image', content: ogImage },
         { property: 'og:type', content: 'article' },
         { property: 'article:published_time', content: new Date(post.createdAt).toISOString() },
         { property: 'article:modified_time', content: new Date(post.updatedAt).toISOString() },
-        
-        // Twitter / X Kartı
         { name: 'twitter:card', content: 'summary_large_image' },
         { name: 'twitter:title', content: `${post.title} — Semih Algan` },
         { name: 'twitter:description', content: cleanDescription },
@@ -77,6 +73,69 @@ function AccountRoleBadge({ role }: { role: string }) {
   return <span className={`acc-role ${cls}`}>{role}</span>
 }
 
+// Zengin Metin (Markdown) Bileşeni
+function MarkdownRenderer({ content }: { content: string }) {
+  const rootRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    // Sayfa render edildikten sonra <pre><code> bloklarını renklendir
+    if (rootRef.current) {
+      rootRef.current.querySelectorAll('pre code').forEach((block) => {
+        hljs.highlightElement(block as HTMLElement)
+      })
+    }
+  }, [content])
+
+  const parseMarkdown = (text: string) => {
+    const tokens: string[] = []
+    
+    // 1. KOD BLOKLARINI KORUMAYA AL (Çok satırlı)
+    let processed = text.replace(/```([a-z]*)\n([\s\S]*?)```/g, (_match, lang, code) => {
+      const placeholder = `__CODE_BLOCK_${tokens.length}__`
+      // XSS ve HTML karakterlerini escape et
+      const escapedCode = code.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      tokens.push(`<pre style="margin: 16px 0; border-radius: 8px; overflow: auto; border: 1px solid var(--line); background: #f6f8fa;"><code class="language-${lang}" style="padding: 16px; font-size: 0.9rem; font-family: monospace; display: block;">${escapedCode}</code></pre>`)
+      return placeholder
+    })
+
+    // 2. TEMEL GÜVENLİK (Geri kalan HTML'i etkisiz hale getir)
+    processed = processed.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    
+    // 3. MD KURALLARI
+    // Satır içi kod (`kod`)
+    processed = processed.replace(/`([^`\n]+)`/g, '<code style="background: #edf2e1; color: #507146; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; font-family: monospace;">$1</code>')
+    // Başlıklar
+    processed = processed.replace(/^### (.*$)/gim, '<h3 style="margin: 24px 0 12px; font-size: 1.25rem;">$1</h3>')
+    processed = processed.replace(/^## (.*$)/gim, '<h2 style="margin: 28px 0 14px; font-size: 1.5rem; letter-spacing: -0.5px;">$1</h2>')
+    processed = processed.replace(/^# (.*$)/gim, '<h1 style="margin: 32px 0 16px; font-size: 1.8rem; letter-spacing: -1px;">$1</h1>')
+    // Kalın ve Eğik
+    processed = processed.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    processed = processed.replace(/\*(.*?)\*/g, '<em>$1</em>')
+    // Linkler
+    processed = processed.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" style="color: var(--green); text-decoration: underline; text-underline-offset: 2px; font-weight: 600;">$1</a>')
+    // Alıntı (Blockquote)
+    processed = processed.replace(/^> (.*$)/gim, '<blockquote style="border-left: 4px solid var(--green); padding: 6px 14px; color: var(--muted); margin: 16px 0; font-style: italic; background: #f4f6ee; border-radius: 0 8px 8px 0;">$1</blockquote>')
+    // Satır atlamaları
+    processed = processed.replace(/\n/g, '<br/>')
+
+    // 4. KORUNAN KOD BLOKLARINI GERİ YÜKLE
+    tokens.forEach((html, index) => {
+      processed = processed.replace(`__CODE_BLOCK_${index}__`, html)
+    })
+
+    return processed
+  }
+
+  return (
+    <div 
+      ref={rootRef}
+      style={{ lineHeight: 1.75, fontSize: '1.05rem', color: 'var(--ink)' }}
+      className="markdown-body"
+      dangerouslySetInnerHTML={{ __html: parseMarkdown(content) }} 
+    />
+  )
+}
+
 function PostPage() {
   const { post: initialPost, error: loaderError } = Route.useLoaderData()
   
@@ -92,9 +151,6 @@ function PostPage() {
 
   useEffect(() => {
     setPost(initialPost)
-    
-    // SSR'da çerez (cookie) gönderilmediği için sunucudan gelen HTML'de kullanıcı çıkış yapmış görünür.
-    // Sayfa tarayıcıda yüklendikten (Hydration) hemen sonra, oturum durumunu ve beğenileri arka planda tekrar çekiyoruz.
     if (initialPost) {
       communityApi<PostDetail>(`post?id=${encodeURIComponent(initialPost.id)}`)
         .then(updatedPost => setPost(updatedPost))
@@ -108,23 +164,17 @@ function PostPage() {
     setPost(updatedPost)
   }
 
-  // OPTIMISTIC UI: Beğen butonuna basıldığı an UI güncellenir, API arkadan çağrılır.
   async function toggleLike() {
     if (!post) return
     setError('')
-    
     const wasLiked = post.liked
     const newLikes = wasLiked ? post.likes - 1 : post.likes + 1
     
-    // Anında Görsel Güncelleme
     setPost({ ...post, liked: !wasLiked, likes: newLikes })
-    
     try {
       const result = await communityApi<{ liked: boolean; likes: number }>('like', { postId: post.id })
-      // Sunucudan gelen kesin sonuçla senkronize et
       setPost(prev => prev ? { ...prev, liked: result.liked, likes: result.likes } : prev)
     } catch (caught) {
-      // Hata olursa işlemi geri al
       setPost({ ...post, liked: wasLiked, likes: wasLiked ? newLikes + 1 : newLikes - 1 })
       setError(caught instanceof Error ? caught.message : 'Beğeni kaydedilemedi.')
     }
@@ -198,10 +248,10 @@ function PostPage() {
       <small style={{ display: 'block', opacity: .6 }}>{formatDate(post.createdAt)} {post.authorName ? `· Yazar: ${post.authorName}` : ''}</small>
       <h1 style={{ margin: '6px 0 20px' }}>{post.title}</h1>
       
-      {/* Görsel En-Boy düzeltmesi (maxHeight eklendi) */}
       {post.hasImage && <img src={imageUrl(post.id, post.updatedAt)} alt="" style={{ width: '100%', maxHeight: 500, objectFit: 'cover', borderRadius: 16, marginBottom: 22 }} />}
       
-      <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.7, fontSize: '1.05rem' }}>{post.body}</div>
+      {/* İŞTE YENİ ZENGİN METİN BİLEŞENİMİZ BURADA ÇALIŞIYOR */}
+      <MarkdownRenderer content={post.body} />
 
       <div style={{ margin: '28px 0', display: 'flex', alignItems: 'center', gap: 12 }}>
         <button type="button" className="button button-outline" onClick={toggleLike} aria-pressed={post.liked} style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
