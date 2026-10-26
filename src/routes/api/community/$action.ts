@@ -1,7 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { env } from 'cloudflare:workers'
 
-// YENİLİK (ADIM 9): R2Bucket desteği eklendi
 type Bindings = { DB: D1Database; IMAGES?: R2Bucket; SETUP_TOKEN?: string; RESEND_API_KEY?: string }
 const DB = () => (env as unknown as Bindings).DB
 const IMAGES = () => (env as unknown as Bindings).IMAGES
@@ -51,6 +50,52 @@ async function verifyPassword(password: string, stored: string | null) {
   return stored !== null && diff === 0
 }
 
+// ADIM 10: GOOGLE AUTHENTICATOR (TOTP) DOĞRULAMA MOTORU
+function base32ToBuf(base32: string) {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
+  let bits = 0, val = 0
+  const bytes = []
+  for (let i = 0; i < base32.length; i++) {
+    const idx = alphabet.indexOf(base32[i].toUpperCase())
+    if (idx === -1) continue
+    val = (val << 5) | idx
+    bits += 5
+    if (bits >= 8) {
+      bytes.push((val >>> (bits - 8)) & 255)
+      bits -= 8
+    }
+  }
+  return new Uint8Array(bytes)
+}
+
+async function verifyTOTP(secret: string, token: string): Promise<boolean> {
+  try {
+    const keyBytes = base32ToBuf(secret)
+    const key = await crypto.subtle.importKey('raw', keyBytes, { name: 'HMAC', hash: 'SHA-1' }, false, ['sign'])
+    const epoch = Math.floor(Date.now() / 1000)
+    const currentCounter = Math.floor(epoch / 30)
+
+    for (let i = -1; i <= 1; i++) {
+      const counter = currentCounter + i
+      const buf = new ArrayBuffer(8)
+      const view = new DataView(buf)
+      view.setBigUint64(0, BigInt(counter))
+
+      const signature = await crypto.subtle.sign('HMAC', key, buf)
+      const sigBytes = new Uint8Array(signature)
+      const offset = sigBytes[sigBytes.length - 1] & 0x0f
+      const binary =
+        ((sigBytes[offset] & 0x7f) << 24) |
+        ((sigBytes[offset + 1] & 0xff) << 16) |
+        ((sigBytes[offset + 2] & 0xff) << 8) |
+        (sigBytes[offset + 3] & 0xff)
+      const code = (binary % 1000000).toString().padStart(6, '0')
+      if (code === token.trim()) return true
+    }
+  } catch {}
+  return false
+}
+
 const generateCode = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), b => ALPHABET[b % 32]).join('')
 const formatCode = (c: string) => c.match(/.{4}/g)!.join('-')
 const normalizeCode = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '')
@@ -59,7 +104,6 @@ const first = <T>(sql: string, ...args: unknown[]) => DB().prepare(sql).bind(...
 const all = async <T>(sql: string, ...args: unknown[]) => (await DB().prepare(sql).bind(...args).all<T>()).results
 const run = (sql: string, ...args: unknown[]) => DB().prepare(sql).bind(...args).run()
 
-// ADIM 7: ÇÖP VERİ TEMİZLEME (GARBAGE COLLECTION)
 let lastCleanupTime = 0
 async function cleanExpiredRecords() {
   const now = Date.now()
@@ -212,6 +256,52 @@ const queryParam = (request: Request, name: string) => new URL(request.url).sear
 type Handler = (request: Request, body: any) => Promise<Response>
 
 const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
+  // YENİLİK (ADIM 10): 2FA DURUMU SORGULAMA VE KURULUM
+  '2fa-status': {
+    method: 'GET',
+    run: async request => {
+      const s = await requireRole(request, 4)
+      const row = await first<{ value: string }>('SELECT value FROM settings WHERE key = \'admin_2fa_enabled\'')
+      const enabled = row?.value === '1'
+      return json({ enabled, username: s.username })
+    },
+  },
+
+  'setup-2fa': {
+    method: 'POST',
+    run: async (request, body) => {
+      await requireRole(request, 4)
+      const secret = String(body.secret ?? '').trim().toUpperCase()
+      const code = String(body.code ?? '').trim()
+      if (!secret || secret.length < 16) throw new HttpError('Geçersiz gizli anahtar.')
+      
+      const valid = await verifyTOTP(secret, code)
+      if (!valid) throw new HttpError('Girdiğin 6 haneli kod hatalı. Lütfen saatinin doğruluğunu kontrol et.', 400)
+
+      await DB().batch([
+        DB().prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (\'admin_2fa_enabled\', \'1\')'),
+        DB().prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (\'admin_2fa_secret\', ?1)').bind(secret),
+      ])
+      return json({ ok: true, message: 'İki Adımlı Doğrulama başarıyla aktifleştirildi.' })
+    },
+  },
+
+  'disable-2fa': {
+    method: 'POST',
+    run: async (request, body) => {
+      const s = await requireRole(request, 4)
+      const user = await first<{ password_hash: string }>('SELECT password_hash FROM members WHERE id = ?1', s.id)
+      if (!(await verifyPassword(String(body.password ?? ''), user?.password_hash ?? null))) {
+        throw new HttpError('Şifreniz hatalı.', 400)
+      }
+      await DB().batch([
+        DB().prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (\'admin_2fa_enabled\', \'0\')'),
+        DB().prepare('DELETE FROM settings WHERE key = \'admin_2fa_secret\''),
+      ])
+      return json({ ok: true, message: 'İki Adımlı Doğrulama devre dışı bırakıldı.' })
+    },
+  },
+
   cleanup: {
     method: 'POST',
     run: async request => {
@@ -409,6 +499,7 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
 
       const password = String(body.password ?? '')
       const founder = !!body.founder
+      const twoFactorCode = body.twoFactorCode ? String(body.twoFactorCode).trim() : null
 
       const member = founder
         ? await first<{ id: string; password_hash: string; role: string; is_admin: number; status: string; is_suspended?: number }>('SELECT id, password_hash, role, is_admin, status, is_suspended FROM members WHERE email = ?1 AND status != \'pending\'', identifier)
@@ -419,6 +510,20 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
 
       const info = getRoleInfo(member.role, member.is_admin)
       if (info.level < 4 && (await isMaintenanceOn())) throw new HttpError('Site bakımda. Şu an yalnızca yönetici giriş yapabilir.', 503)
+
+      // YENİLİK (ADIM 10): EĞER ADMİN İSE VE 2FA AKTİFSE 6 HANELİ KODU DOĞRULA
+      if (info.level >= 4) {
+        const is2FaRow = await first<{ value: string }>('SELECT value FROM settings WHERE key = \'admin_2fa_enabled\'')
+        if (is2FaRow?.value === '1') {
+          if (!twoFactorCode) {
+            // Şifre doğru ama henüz 2FA kodu girilmemişse ön yüze sinyal gönder
+            return json({ requires2FA: true }, 200)
+          }
+          const secretRow = await first<{ value: string }>('SELECT value FROM settings WHERE key = \'admin_2fa_secret\'')
+          const valid = secretRow ? await verifyTOTP(secretRow.value, twoFactorCode) : false
+          if (!valid) throw new HttpError('İki adımlı doğrulama (2FA) kodu hatalı.', 401)
+        }
+      }
 
       const token = randomToken()
       await run('INSERT INTO sessions (token_hash, member_id, expires_at) VALUES (?1, ?2, ?3)', await sha256(token), member.id, Date.now() + SESSION_TTL_MS)
@@ -632,14 +737,12 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
     },
   },
 
-  // YENİLİK (ADIM 9): GÖRSEL SERVİSİ (Önce R2'den dene, yoksa D1'den oku)
   'post-image': {
     method: 'GET',
     run: async request => {
       const id = queryParam(request, 'id')
       if (!id) throw new HttpError('Geçersiz görsel kimliği.', 400)
 
-      // 1. Önce Cloudflare R2'den hızlıca çekmeyi dene
       const r2 = IMAGES()
       if (r2) {
         const obj = await r2.get(`post-${id}`)
@@ -653,7 +756,6 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
         }
       }
 
-      // 2. R2'de yoksa veya eski resimse D1 veritabanından oku (Geriye dönük uyumluluk)
       const row = await first<{ mime: string; data: string }>('SELECT mime, data FROM post_images WHERE post_id = ?1', id)
       if (!row || !row.data) throw new HttpError('Görsel bulunamadı.', 404)
       return new Response(fromB64(row.data), {
@@ -719,7 +821,6 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
     },
   },
 
-  // YENİLİK (ADIM 9): GÖRSEL KAYDI (R2'ye yükle, D1'i şişirme!)
   'save-post': {
     method: 'POST',
     run: async (request, body) => {
@@ -745,18 +846,14 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
         await run('INSERT INTO posts (id, title, body, created_at, updated_at, member_id) VALUES (?1, ?2, ?3, ?4, ?4, ?5)', id, title, text, now, s.id)
       }
 
-      // R2 YÖNETİMİ
       const r2 = IMAGES()
       if (image) {
         if (r2) {
-          // R2'ye yükle
           await r2.put(`post-${id}`, fromB64(image.data), {
             httpMetadata: { contentType: image.mime }
           })
-          // D1'de sadece görsel varlığını işaretle (veri alanı boş bırakılır, D1 şişmez!)
           await run('INSERT OR REPLACE INTO post_images (post_id, mime, data) VALUES (?1, ?2, \'\')', id, image.mime)
         } else {
-          // R2 henüz bağlanmadıysa D1'e yedekle
           await run('INSERT OR REPLACE INTO post_images (post_id, mime, data) VALUES (?1, ?2, ?3)', id, image.mime, image.data)
         }
       } else if (body.removeImage) {
@@ -768,7 +865,6 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
     },
   },
 
-  // YENİLİK (ADIM 9): YAZI SİLİNİRKEN R2'DEKİ GÖRSELİ DE SİL
   'delete-post': {
     method: 'POST',
     run: async (request, body) => {
