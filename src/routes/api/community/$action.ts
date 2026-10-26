@@ -1,8 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { env } from 'cloudflare:workers'
 
-type Bindings = { DB: D1Database; SETUP_TOKEN?: string; RESEND_API_KEY?: string }
+// YENİLİK (ADIM 9): R2Bucket desteği eklendi
+type Bindings = { DB: D1Database; IMAGES?: R2Bucket; SETUP_TOKEN?: string; RESEND_API_KEY?: string }
 const DB = () => (env as unknown as Bindings).DB
+const IMAGES = () => (env as unknown as Bindings).IMAGES
 const SETUP_TOKEN = () => (env as unknown as Bindings).SETUP_TOKEN
 const RESEND_API_KEY = () => (env as unknown as Bindings).RESEND_API_KEY
 
@@ -210,7 +212,6 @@ const queryParam = (request: Request, name: string) => new URL(request.url).sear
 type Handler = (request: Request, body: any) => Promise<Response>
 
 const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
-  // Manuel tetiklenebilen temizleme endpoint'i
   cleanup: {
     method: 'POST',
     run: async request => {
@@ -631,11 +632,28 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
     },
   },
 
+  // YENİLİK (ADIM 9): GÖRSEL SERVİSİ (Önce R2'den dene, yoksa D1'den oku)
   'post-image': {
     method: 'GET',
     run: async request => {
       const id = queryParam(request, 'id')
       if (!id) throw new HttpError('Geçersiz görsel kimliği.', 400)
+
+      // 1. Önce Cloudflare R2'den hızlıca çekmeyi dene
+      const r2 = IMAGES()
+      if (r2) {
+        const obj = await r2.get(`post-${id}`)
+        if (obj) {
+          const headers = new Headers()
+          obj.writeHttpMetadata(headers)
+          headers.set('etag', obj.httpEtag)
+          headers.set('Cache-Control', 'public, max-age=31536000, immutable')
+          headers.set('X-Content-Type-Options', 'nosniff')
+          return new Response(obj.body, { headers })
+        }
+      }
+
+      // 2. R2'de yoksa veya eski resimse D1 veritabanından oku (Geriye dönük uyumluluk)
       const row = await first<{ mime: string; data: string }>('SELECT mime, data FROM post_images WHERE post_id = ?1', id)
       if (!row || !row.data) throw new HttpError('Görsel bulunamadı.', 404)
       return new Response(fromB64(row.data), {
@@ -701,6 +719,7 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
     },
   },
 
+  // YENİLİK (ADIM 9): GÖRSEL KAYDI (R2'ye yükle, D1'i şişirme!)
   'save-post': {
     method: 'POST',
     run: async (request, body) => {
@@ -709,6 +728,7 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       const text = String(body.body ?? '').trim()
       if (title.length < 3 || title.length > 120) throw new HttpError('Başlık 3–120 karakter olmalı.')
       if (text.length < 1 || text.length > 10000) throw new HttpError('Metin 1–10.000 karakter olmalı.')
+      
       let image: { mime: string; data: string } | null = null
       if (typeof body.image === 'string' && body.image) {
         const m = body.image.length <= MAX_IMAGE_CHARS ? IMAGE_RE.exec(body.image) : null
@@ -724,17 +744,39 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
         id = crypto.randomUUID()
         await run('INSERT INTO posts (id, title, body, created_at, updated_at, member_id) VALUES (?1, ?2, ?3, ?4, ?4, ?5)', id, title, text, now, s.id)
       }
-      if (image) await run('INSERT OR REPLACE INTO post_images (post_id, mime, data) VALUES (?1, ?2, ?3)', id, image.mime, image.data)
-      else if (body.removeImage) await run('DELETE FROM post_images WHERE post_id = ?1', id)
+
+      // R2 YÖNETİMİ
+      const r2 = IMAGES()
+      if (image) {
+        if (r2) {
+          // R2'ye yükle
+          await r2.put(`post-${id}`, fromB64(image.data), {
+            httpMetadata: { contentType: image.mime }
+          })
+          // D1'de sadece görsel varlığını işaretle (veri alanı boş bırakılır, D1 şişmez!)
+          await run('INSERT OR REPLACE INTO post_images (post_id, mime, data) VALUES (?1, ?2, \'\')', id, image.mime)
+        } else {
+          // R2 henüz bağlanmadıysa D1'e yedekle
+          await run('INSERT OR REPLACE INTO post_images (post_id, mime, data) VALUES (?1, ?2, ?3)', id, image.mime, image.data)
+        }
+      } else if (body.removeImage) {
+        if (r2) await r2.delete(`post-${id}`).catch(() => {})
+        await run('DELETE FROM post_images WHERE post_id = ?1', id)
+      }
+
       return json({ ok: true, id })
     },
   },
 
+  // YENİLİK (ADIM 9): YAZI SİLİNİRKEN R2'DEKİ GÖRSELİ DE SİL
   'delete-post': {
     method: 'POST',
     run: async (request, body) => {
       await requireRole(request, 4)
       const id = String(body.id ?? '')
+      const r2 = IMAGES()
+      if (r2) await r2.delete(`post-${id}`).catch(() => {})
+
       await DB().batch([
         DB().prepare('DELETE FROM post_images WHERE post_id = ?1').bind(id),
         DB().prepare('DELETE FROM post_likes WHERE post_id = ?1').bind(id),
@@ -972,7 +1014,6 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
 
 async function handle(request: Request, action: string) {
   try {
-    // Gelen her istekte sessizce saatlik çöp temizleme kontrolünü tetikliyoruz
     void cleanExpiredRecords()
 
     const entry = Object.hasOwn(actions, action) ? actions[action] : undefined
