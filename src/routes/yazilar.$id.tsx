@@ -3,28 +3,60 @@ import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Check, Heart, Pencil, Send, Trash2, X } from 'lucide-react'
 import { PublicShell } from '../components/PublicShell'
-import { ApiError, communityApi } from '../lib/community'
+import { communityApi } from '../lib/community'
 import { formatDate, imageUrl } from '../lib/posts'
 import type { PostDetail } from '../lib/posts'
 
 export const Route = createFileRoute('/yazilar/$id')({
-  // Veri tarayıcıda yüklenir: sunucuda göreli /api adresine istek atılamadığı ve giriş çerezi gitmediği için SSR kapalı
-  ssr: false,
+  // ssr: false KALDIRILDI! Artık sayfa sunucuda render edilerek botlara sunulacak.
   loader: async ({ params }) => {
     try {
-      const post = await communityApi<PostDetail>(`post?id=${encodeURIComponent(params.id)}`)
+      // Sunucuda (SSR) çalışırken relative URL çalışmaz, absolute URL gerekir.
+      const baseUrl = import.meta.env.SSR ? 'https://semihalgan.com.tr' : ''
+      const res = await fetch(`${baseUrl}/api/community/post?id=${encodeURIComponent(params.id)}`, { cache: 'no-store' })
+      
+      if (!res.ok) {
+        if (res.status === 404) return { post: null, error: 'missing' }
+        throw new Error('Yazı yüklenemedi')
+      }
+      const post = await res.json()
       return { post, error: null }
     } catch (caught) {
-      const status = caught instanceof ApiError ? caught.status : 500
-      return { post: null, error: status === 404 ? 'missing' : 'error' }
+      return { post: null, error: 'error' }
     }
   },
   head: ({ loaderData }) => {
     if (!loaderData?.post) return { meta: [{ title: 'Yazı Bulunamadı — Semih Algan' }] }
+    
+    const post = loaderData.post
+    const siteUrl = 'https://semihalgan.com.tr'
+    
+    // Yazıya ait görsel varsa o, yoksa varsayılan og-image.png (Sosyal medya önizleme resmi)
+    const ogImage = post.hasImage 
+      ? `${siteUrl}/api/community/post-image?id=${post.id}&v=${post.updatedAt}` 
+      : `${siteUrl}/og-image.png`
+    
+    // SEO ve paylaşım kartları için temizlenmiş kısa açıklama (155 karakter)
+    const cleanDescription = post.body.replace(/\s+/g, ' ').substring(0, 155) + '...'
+
     return {
       meta: [
-        { title: `${loaderData.post.title} — Semih Algan` },
-        { name: 'description', content: loaderData.post.body.substring(0, 160) }
+        { title: `${post.title} — Semih Algan` },
+        { name: 'description', content: cleanDescription },
+        
+        // OpenGraph / Sosyal Medya (WhatsApp, LinkedIn, vb.)
+        { property: 'og:title', content: `${post.title} — Semih Algan` },
+        { property: 'og:description', content: cleanDescription },
+        { property: 'og:image', content: ogImage },
+        { property: 'og:type', content: 'article' },
+        { property: 'article:published_time', content: new Date(post.createdAt).toISOString() },
+        { property: 'article:modified_time', content: new Date(post.updatedAt).toISOString() },
+        
+        // Twitter / X Kartı
+        { name: 'twitter:card', content: 'summary_large_image' },
+        { name: 'twitter:title', content: `${post.title} — Semih Algan` },
+        { name: 'twitter:description', content: cleanDescription },
+        { name: 'twitter:image', content: ogImage }
       ]
     }
   },
@@ -58,9 +90,16 @@ function PostPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [actionBusy, setActionBusy] = useState(false)
 
-  // Router verisi değiştiğinde state'i güncelle
   useEffect(() => {
     setPost(initialPost)
+    
+    // SSR'da çerez (cookie) gönderilmediği için sunucudan gelen HTML'de kullanıcı çıkış yapmış görünür.
+    // Sayfa tarayıcıda yüklendikten (Hydration) hemen sonra, oturum durumunu ve beğenileri arka planda tekrar çekiyoruz.
+    if (initialPost) {
+      communityApi<PostDetail>(`post?id=${encodeURIComponent(initialPost.id)}`)
+        .then(updatedPost => setPost(updatedPost))
+        .catch(() => {})
+    }
   }, [initialPost])
 
   async function reloadPost() {
