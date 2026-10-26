@@ -1,0 +1,7 @@
+User-agent: *
+Disallow: /admin
+Disallow: /panel
+Disallow: /giris
+Disallow: /api/
+
+Sitemap: https://semihalgan.com.tr/api/sitemap
