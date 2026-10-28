@@ -12,9 +12,10 @@ export type LegalDoc = {
 
 const EMAIL = '71.semih.algan@gmail.com'
 const SITE = 'semihalgan.com.tr'
-const UPDATED = '20 Ekim 2026'
+const UPDATED = '28 Ekim 2026'
 
 export const legalLinks = [
+  { path: '/kunye', label: 'Künye' },
   { path: '/kvkk', label: 'KVKK Aydınlatma Metni' },
   { path: '/gizlilik', label: 'Gizlilik ve Çerez Politikası' },
   { path: '/kullanim-kosullari', label: 'Kullanım Koşulları' },
@@ -363,7 +364,48 @@ const uyelik: LegalDoc = {
   ],
 }
 
+const kunye: LegalDoc = {
+  slug: 'kunye',
+  path: '/kunye',
+  title: 'Künye',
+  eyebrow: 'SİTE SAHİBİ BİLGİLERİ',
+  updated: UPDATED,
+  description: 'Semih Algan web sitesinin künye ve iletişim bilgileri.',
+  sections: [
+    {
+      title: '1. Site sahibi ve sorumlusu',
+      blocks: [
+        { list: [
+          'Ad Soyad: Semih Algan',
+          `Alan adı: ${SITE}`,
+          `E-posta: ${EMAIL}`,
+        ] },
+        'Site sahibi, bu sitenin içerik sağlayıcısı ve yer sağlayıcısıdır.',
+      ],
+    },
+    {
+      title: '2. Barındırma ve altyapı',
+      blocks: [
+        'Web sitesi, Cloudflare, Inc. altyapısı üzerinde barındırılmaktadır. Şifre sıfırlama e-postaları Resend aracılığıyla iletilir.',
+      ],
+    },
+    {
+      title: '3. İçerik bildirimleri',
+      blocks: [
+        `Sitede yer alan yazı veya yorumlarla ilgili hak ihlali, şikâyet ve kaldırma talepleriniz için ${EMAIL} adresine e-posta gönderebilirsiniz. Başvurular makul süre içinde değerlendirilir.`,
+      ],
+    },
+    {
+      title: '4. Kişisel veriler',
+      blocks: [
+        'Kişisel verilerin işlenmesine ilişkin ayrıntılı bilgi için KVKK Aydınlatma Metni ve Gizlilik ve Çerez Politikası sayfalarına bakabilirsiniz.',
+      ],
+    },
+  ],
+}
+
 export const legalDocs: Record<string, LegalDoc> = {
+  kunye,
   kvkk,
   gizlilik,
   'kullanim-kosullari': kosullar,
