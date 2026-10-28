@@ -24,6 +24,7 @@ export const Route = createFileRoute('/api/sitemap')({
           { path: '/', priority: '1.0' },
           { path: '/yazilar', priority: '0.9' },
           { path: '/guncellemeler', priority: '0.8' },
+          { path: '/kunye', priority: '0.5' },
           { path: '/kvkk', priority: '0.5' },
           { path: '/gizlilik', priority: '0.5' },
           { path: '/kullanim-kosullari', priority: '0.5' },
