@@ -90,29 +90,43 @@ function MarkdownRenderer({ content }: { content: string }) {
     }
   }, [content])
 
+  const esc = (s: string) =>
+    s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+
+  // Sadece güvenli link adreslerine izin ver (javascript:, data: vb. engellenir)
+  const safeUrl = (url: string) => {
+    const u = url.trim()
+    return /^(https?:\/\/|mailto:|\/(?!\/)|#)/i.test(u) ? u : '#'
+  }
+
   const parseMarkdown = (text: string) => {
     const tokens: string[] = []
     
     let processed = text.replace(/```([a-z]*)\n([\s\S]*?)```/g, (_match, lang, code) => {
-      const placeholder = `__CODE_BLOCK_${tokens.length}__`
-      const escapedCode = code.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      const placeholder = `\u0000CODE${tokens.length}\u0000`
+      const escapedCode = esc(code)
       tokens.push(`<pre style="margin: 16px 0; border-radius: 8px; overflow: auto; border: 1px solid var(--line); background: #f6f8fa;"><code class="language-${lang}" style="padding: 16px; font-size: 0.9rem; font-family: monospace; display: block;">${escapedCode}</code></pre>`)
       return placeholder
     })
 
-    processed = processed.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    processed = esc(processed)
     processed = processed.replace(/`([^`\n]+)`/g, '<code style="background: #edf2e1; color: #507146; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; font-family: monospace;">$1</code>')
     processed = processed.replace(/^### (.*$)/gim, '<h3 style="margin: 24px 0 12px; font-size: 1.25rem;">$1</h3>')
     processed = processed.replace(/^## (.*$)/gim, '<h2 style="margin: 28px 0 14px; font-size: 1.5rem; letter-spacing: -0.5px;">$1</h2>')
     processed = processed.replace(/^# (.*$)/gim, '<h1 style="margin: 32px 0 16px; font-size: 1.8rem; letter-spacing: -1px;">$1</h1>')
     processed = processed.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     processed = processed.replace(/\*(.*?)\*/g, '<em>$1</em>')
-    processed = processed.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" style="color: var(--green); text-decoration: underline; text-underline-offset: 2px; font-weight: 600;">$1</a>')
-    processed = processed.replace(/^> (.*$)/gim, '<blockquote style="border-left: 4px solid var(--green); padding: 6px 14px; color: var(--muted); margin: 16px 0; font-style: italic; background: #f4f6ee; border-radius: 0 8px 8px 0;">$1</blockquote>')
+    processed = processed.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, label, url) => `<a href="${safeUrl(url)}" target="_blank" rel="noopener noreferrer" style="color: var(--green); text-decoration: underline; text-underline-offset: 2px; font-weight: 600;">${label}</a>`)
+    processed = processed.replace(/^&gt; (.*$)/gim, '<blockquote style="border-left: 4px solid var(--green); padding: 6px 14px; color: var(--muted); margin: 16px 0; font-style: italic; background: #f4f6ee; border-radius: 0 8px 8px 0;">$1</blockquote>')
     processed = processed.replace(/\n/g, '<br/>')
 
     tokens.forEach((html, index) => {
-      processed = processed.replace(`__CODE_BLOCK_${index}__`, html)
+      processed = processed.replace(`\u0000CODE${index}\u0000`, () => html)
     })
 
     return processed
@@ -374,4 +388,4 @@ function PostPage() {
       )}
     </PublicShell>
   )
-}
+                        }
