@@ -812,11 +812,15 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       const commentId = String(body.id ?? '')
       const text = String(body.body ?? '').trim()
       if (text.length < 1 || text.length > 1000) throw new HttpError('Yorum 1–1000 karakter olmalı.')
-      const existing = await first<{ id: string; member_id: string }>('SELECT id, member_id FROM comments WHERE id = ?1', commentId)
+      const existing = await first<{ id: string; member_id: string; body: string }>('SELECT id, member_id, body FROM comments WHERE id = ?1', commentId)
       if (!existing) throw new HttpError('Yorum bulunamadı.', 404)
       if (existing.member_id !== s.id) throw new HttpError('Yalnızca kendi yorumunuzu düzenleyebilirsiniz.', 403)
 
-      await run('UPDATE comments SET body = ?1, edited_at = ?2 WHERE id = ?3', text, Date.now(), commentId)
+      const now = Date.now()
+      await DB().batch([
+        DB().prepare('INSERT INTO comment_history (comment_id, member_id, old_body, edited_at) VALUES (?1, ?2, ?3, ?4)').bind(commentId, s.id, existing.body, now),
+        DB().prepare('UPDATE comments SET body = ?1, edited_at = ?2 WHERE id = ?3').bind(text, now, commentId),
+      ])
       return json({ ok: true })
     },
   },
