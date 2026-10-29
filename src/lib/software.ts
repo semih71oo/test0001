@@ -17,4 +17,12 @@ export const softwareList: Software[] = [
     href: '/yazilimlar/not',
     status: 'Yayında',
   },
+  {
+    slug: 'link',
+    title: 'URL Kısaltıcı & Analitik',
+    description: 'Uzun linkleri anında kısalt, QR kod oluştur ve tıklayanların ülke ile cihaz istatistiklerini canlı takip et.',
+    tags: ['Hızlı Yönlendirme', 'İstatistik', 'QR Kod'],
+    href: 'https://link.semihalgan.com.tr', // Subdomain'i farklı yaptıysan (örn: l.semihalgan.com.tr) burayı ona göre yaz
+    status: 'Yayında',
+  },
 ]
