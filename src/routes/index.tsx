@@ -47,7 +47,7 @@ function HomePage() {
         </a>
         <nav className="desktop-nav" aria-label="Ana menü">
           <a className="nav-active" href="#baslangic">Ana Sayfa</a>
-          <a href="#yazilimlar">Yazılımlar <span className="nav-badge">Yakında</span></a>
+          <a href="/yazilimlar">Yazılımlar</a>
           <a href="#hakkimda">Hakkımda</a>
           <a href="#pano">Geliştiriciler</a>
           <a href="/yazilar">Yazılar</a>
@@ -60,7 +60,7 @@ function HomePage() {
       </header>
       <nav className="mobile-nav" id="mobile-nav" aria-label="Mobil menü" hidden={!menuOpen}>
         <a href="#baslangic" onClick={closeMenu}>Ana Sayfa</a>
-        <a href="#yazilimlar" onClick={closeMenu}>Yazılımlar · Yakında</a>
+        <a href="/yazilimlar" onClick={closeMenu}>Yazılımlar</a>
         <a href="#hakkimda" onClick={closeMenu}>Hakkımda</a>
         <a href="#pano" onClick={closeMenu}>Geliştiriciler</a>
         <a href="/yazilar" onClick={closeMenu}>Yazılar</a>
@@ -75,7 +75,7 @@ function HomePage() {
             <h1 id="hero-title">İyi fikirler,<br /><span>güçlü yazılımlar.</span></h1>
             <p className="hero-description">Merhaba, ben Semih. Fikirleri kodla buluşturuyor,<br className="desktop-break" /> kullanışlı ve özenle tasarlanmış yazılımlar geliştiriyorum.</p>
             <div className="hero-actions">
-              <a className="button button-primary" href="#yazilimlar">Yazılımları keşfet <ArrowUpRight size={19} /></a>
+              <a className="button button-primary" href="/yazilimlar">Yazılımları keşfet <ArrowUpRight size={19} /></a>
               <a className="button button-text" href="#hakkimda">Beni tanı <ArrowRight size={18} /></a>
             </div>
             <div className="hero-note"><span className="mini-avatar">sa.</span><span>Bir geliştirici. Birçok fikir.<br /><strong>Her zaman daha iyisinin peşinde.</strong></span></div>
@@ -96,11 +96,11 @@ function HomePage() {
         </section>
         <div className="values-strip"><div className="container values-inner"><span><Code2 size={18} /> Temiz kod</span><span className="strip-divider" /><span><Puzzle size={18} /> Gerçek çözümler</span><span className="strip-divider" /><span><Sparkles size={18} /> Özenli tasarım</span><a href="#yazilimlar">Neler geliyor? <ArrowDown size={16} /></a></div></div>
         <section className="software-section container section-space" id="yazilimlar" aria-labelledby="software-title">
-          <div className="section-heading"><div><div className="eyebrow section-eyebrow">01 / YAZILIMLAR</div><h2 id="software-title">Yeni fikirler yolda.</h2></div><span className="pill"><span className="status-dot" /> Çok yakında</span></div>
+          <div className="section-heading"><div><div className="eyebrow section-eyebrow">01 / YAZILIMLAR</div><h2 id="software-title">Yeni fikirler yolda.</h2></div><span className="pill"><span className="status-dot" /> Yeni: Tek Kullanımlık Not</span></div>
           <div className="coming-soon">
             <div className="coming-graphic" aria-hidden="true"><div className="small-window"><div className="window-dots"><i /><i /><i /></div><Code2 size={44} strokeWidth={1.4} /><div className="window-line" /><div className="window-line short" /></div><span className="graphic-spark"><Sparkles size={22} /></span></div>
             <div className="coming-copy"><span className="small-label">BİRAZ MERAK, BİRAZ KOD.</span><h3>Bir sonraki yazılımın<br />burada seni bekliyor olacak.</h3><p>Üzerinde çalıştığım yazılımlar yakında bu vitrinde yerini alacak. Şimdilik keşfetme zamanı; satışlar henüz başlamadı.</p><span className="sales-note"><CheckCheck size={16} /> Şu an satın alma ve ödeme işlemi yapılmıyor.</span></div>
-            <a className="coming-link" href="#iletisim">Aklında bir fikir mi var? <ArrowUpRight size={18} /></a>
+            <a className="coming-link" href="/yazilimlar">Tüm yazılımları gör <ArrowUpRight size={18} /></a>
           </div>
         </section>
         <DeveloperBoard />
