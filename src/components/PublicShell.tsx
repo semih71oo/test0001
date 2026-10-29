@@ -35,6 +35,7 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
         
         <nav className="desktop-nav" aria-label="Ana menü">
           <Link to="/">Ana Sayfa</Link>
+          <Link to="/yazilimlar" activeProps={{ className: 'nav-active' }}>Yazılımlar</Link>
           <Link to="/yazilar" activeProps={{ className: 'nav-active' }}>Yazılar</Link>
           <Link to="/guncellemeler" activeProps={{ className: 'nav-active' }}>Güncellemeler</Link>
         </nav>
@@ -56,6 +57,7 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
       {/* MOBİL AÇILIR MENÜ */}
       <nav className="mobile-nav" id="mobile-nav" aria-label="Mobil menü" hidden={!menuOpen}>
         <Link to="/" onClick={closeMenu}>Ana Sayfa</Link>
+        <Link to="/yazilimlar" onClick={closeMenu}>Yazılımlar</Link>
         <Link to="/yazilar" onClick={closeMenu}>Yazılar</Link>
         <Link to="/guncellemeler" onClick={closeMenu}>Güncellemeler</Link>
         <a href={panelHref} onClick={closeMenu}>{panelLabel} <ArrowUpRight size={17} /></a>
@@ -71,6 +73,7 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
 
       {/* FOOTER */}
       <footer className="container" style={{ maxWidth: 760, display: 'flex', flexWrap: 'wrap', gap: '8px 18px', padding: '24px 0 40px', opacity: .75, fontSize: '.9rem' }}>
+        <Link to="/yazilimlar">Yazılımlar</Link>
         <Link to="/guncellemeler">Güncellemeler</Link>
         {legalLinks.map(link => (
           <Link key={link.path} to={link.path}>
