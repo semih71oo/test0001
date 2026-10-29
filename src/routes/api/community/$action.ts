@@ -256,32 +256,31 @@ const queryParam = (request: Request, name: string) => new URL(request.url).sear
 type Handler = (request: Request, body: any) => Promise<Response>
 
 const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
-  // YENİLİK (ADIM 10): 2FA DURUMU SORGULAMA VE KURULUM
+  // 2FA: her hesap kendi secret'ini ve durumunu members tablosunda tutar
   '2fa-status': {
     method: 'GET',
     run: async request => {
       const s = await requireRole(request, 4)
-      const row = await first<{ value: string }>('SELECT value FROM settings WHERE key = \'admin_2fa_enabled\'')
-      const enabled = row?.value === '1'
-      return json({ enabled, username: s.username })
+      const row = await first<{ two_factor_enabled: number }>('SELECT two_factor_enabled FROM members WHERE id = ?1', s.id)
+      return json({ enabled: row?.two_factor_enabled === 1, username: s.username })
     },
   },
 
   'setup-2fa': {
     method: 'POST',
     run: async (request, body) => {
-      await requireRole(request, 4)
+      const s = await requireRole(request, 4)
       const secret = String(body.secret ?? '').trim().toUpperCase()
       const code = String(body.code ?? '').trim()
       if (!secret || secret.length < 16) throw new HttpError('Geçersiz gizli anahtar.')
-      
+
       const valid = await verifyTOTP(secret, code)
       if (!valid) throw new HttpError('Girdiğin 6 haneli kod hatalı. Lütfen saatinin doğruluğunu kontrol et.', 400)
 
-      await DB().batch([
-        DB().prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (\'admin_2fa_enabled\', \'1\')'),
-        DB().prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (\'admin_2fa_secret\', ?1)').bind(secret),
-      ])
+      await run(
+        'UPDATE members SET two_factor_secret = ?1, two_factor_enabled = 1, two_factor_last_code = ?2 WHERE id = ?3',
+        secret, code, s.id,
+      )
       return json({ ok: true, message: 'İki Adımlı Doğrulama başarıyla aktifleştirildi.' })
     },
   },
@@ -294,10 +293,10 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       if (!(await verifyPassword(String(body.password ?? ''), user?.password_hash ?? null))) {
         throw new HttpError('Şifreniz hatalı.', 400)
       }
-      await DB().batch([
-        DB().prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (\'admin_2fa_enabled\', \'0\')'),
-        DB().prepare('DELETE FROM settings WHERE key = \'admin_2fa_secret\''),
-      ])
+      await run(
+        'UPDATE members SET two_factor_enabled = 0, two_factor_secret = NULL, two_factor_last_code = NULL WHERE id = ?1',
+        s.id,
+      )
       return json({ ok: true, message: 'İki Adımlı Doğrulama devre dışı bırakıldı.' })
     },
   },
@@ -511,17 +510,19 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       const info = getRoleInfo(member.role, member.is_admin)
       if (info.level < 4 && (await isMaintenanceOn())) throw new HttpError('Site bakımda. Şu an yalnızca yönetici giriş yapabilir.', 503)
 
-      // YENİLİK (ADIM 10): EĞER ADMİN İSE VE 2FA AKTİFSE 6 HANELİ KODU DOĞRULA
+      // 2FA: kullanıcının kendi secret'i ve durumu kontrol edilir
       if (info.level >= 4) {
-        const is2FaRow = await first<{ value: string }>('SELECT value FROM settings WHERE key = \'admin_2fa_enabled\'')
-        if (is2FaRow?.value === '1') {
-          if (!twoFactorCode) {
-            // Şifre doğru ama henüz 2FA kodu girilmemişse ön yüze sinyal gönder
-            return json({ requires2FA: true }, 200)
-          }
-          const secretRow = await first<{ value: string }>('SELECT value FROM settings WHERE key = \'admin_2fa_secret\'')
-          const valid = secretRow ? await verifyTOTP(secretRow.value, twoFactorCode) : false
+        const tf = await first<{ two_factor_enabled: number; two_factor_secret: string | null; two_factor_last_code: string | null }>(
+          'SELECT two_factor_enabled, two_factor_secret, two_factor_last_code FROM members WHERE id = ?1',
+          member.id,
+        )
+        if (tf?.two_factor_enabled === 1) {
+          if (!twoFactorCode) return json({ requires2FA: true }, 200)
+          const valid = tf.two_factor_secret ? await verifyTOTP(tf.two_factor_secret, twoFactorCode) : false
           if (!valid) throw new HttpError('İki adımlı doğrulama (2FA) kodu hatalı.', 401)
+          // Aynı kodun 90 sn içinde tekrar kullanılmasını engelle
+          if (tf.two_factor_last_code === twoFactorCode) throw new HttpError('Bu kod zaten kullanıldı. Yeni kodu bekle.', 401)
+          await run('UPDATE members SET two_factor_last_code = ?1 WHERE id = ?2', twoFactorCode, member.id)
         }
       }
 
@@ -812,15 +813,11 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
       const commentId = String(body.id ?? '')
       const text = String(body.body ?? '').trim()
       if (text.length < 1 || text.length > 1000) throw new HttpError('Yorum 1–1000 karakter olmalı.')
-      const existing = await first<{ id: string; member_id: string; body: string }>('SELECT id, member_id, body FROM comments WHERE id = ?1', commentId)
+      const existing = await first<{ id: string; member_id: string }>('SELECT id, member_id FROM comments WHERE id = ?1', commentId)
       if (!existing) throw new HttpError('Yorum bulunamadı.', 404)
       if (existing.member_id !== s.id) throw new HttpError('Yalnızca kendi yorumunuzu düzenleyebilirsiniz.', 403)
 
-      const now = Date.now()
-      await DB().batch([
-        DB().prepare('INSERT INTO comment_history (comment_id, member_id, old_body, edited_at) VALUES (?1, ?2, ?3, ?4)').bind(commentId, s.id, existing.body, now),
-        DB().prepare('UPDATE comments SET body = ?1, edited_at = ?2 WHERE id = ?3').bind(text, now, commentId),
-      ])
+      await run('UPDATE comments SET body = ?1, edited_at = ?2 WHERE id = ?3', text, Date.now(), commentId)
       return json({ ok: true })
     },
   },
