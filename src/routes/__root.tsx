@@ -6,6 +6,26 @@ import { NotFoundPage } from '../components/NotFoundPage'
 
 import '../styles.css'
 
+// Yerel (kendi sunucundan) fontlar — Google Fonts'a istek atılmaz (KVKK)
+import '@fontsource/dm-sans/latin-400.css'
+import '@fontsource/dm-sans/latin-ext-400.css'
+import '@fontsource/dm-sans/latin-500.css'
+import '@fontsource/dm-sans/latin-ext-500.css'
+import '@fontsource/dm-sans/latin-600.css'
+import '@fontsource/dm-sans/latin-ext-600.css'
+import '@fontsource/dm-sans/latin-700.css'
+import '@fontsource/dm-sans/latin-ext-700.css'
+import '@fontsource/manrope/latin-400.css'
+import '@fontsource/manrope/latin-ext-400.css'
+import '@fontsource/manrope/latin-500.css'
+import '@fontsource/manrope/latin-ext-500.css'
+import '@fontsource/manrope/latin-600.css'
+import '@fontsource/manrope/latin-ext-600.css'
+import '@fontsource/manrope/latin-700.css'
+import '@fontsource/manrope/latin-ext-700.css'
+import '@fontsource/manrope/latin-800.css'
+import '@fontsource/manrope/latin-ext-800.css'
+
 const siteName = 'Semih Algan — Yazılım & Fikirler'
 const siteDescription = 'Semih Algan’ın yazılım vitrini. Yeni yazılımlar yakında; geliştiriciyi tanıyın, fikirlerinizi paylaşın ve iletişime geçin.'
 const siteUrl = 'https://semihalgan.com.tr'
@@ -43,9 +63,6 @@ export const Route = createRootRoute({
       { rel: 'icon', type: 'image/png', sizes: '512x512', href: '/favicon-512x512-kare.png' },
       { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
       { rel: 'apple-touch-icon', sizes: '180x180', href: '/apple-touch-icon.png' },
-      { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
-      { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossOrigin: 'anonymous' },
-      { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap' },
     ],
     meta: [
       {
