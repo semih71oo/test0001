@@ -84,13 +84,14 @@ const kvkk: LegalDoc = {
     {
       title: '6. Verilerin aktarılması',
       blocks: [
-        'Kişisel verileriniz satılmaz ve reklam amacıyla üçüncü kişilerle paylaşılmaz. Hizmetin sunulabilmesi için aşağıdaki hizmet sağlayıcılar kullanılır:',
+        'Kişisel verileriniz satılmaz ve reklam amacıyla üçüncü kişilerle paylaşılmaz. Sitenin çalışması için aşağıdaki hizmet sağlayıcılar kullanılır:',
         { list: [
-          'Cloudflare, Inc.: web sitesinin barındırılması, veritabanı ve ağ güvenliği.',
-          'Resend: yalnızca şifre sıfırlama e-postasının iletilmesi.',
-          'Google Fonts: yazı tiplerinin yüklenmesi sırasında tarayıcınızın IP adresi Google’a iletilir.',
+          'Cloudflare, Inc.: web sitesinin barındırılması, veritabanı ve ağ güvenliği. Bu hizmet kapsamında verileriniz Cloudflare’in yurt dışındaki sunucularında işlenebilir.',
+          'Resend: yalnızca şifre sıfırlama e-postasının iletilmesi. E-posta adresiniz ve e-postanın içeriği Resend’in sunucularına iletilir; bu sunucular yurt dışında bulunabilir.',
         ] },
-        'Bu hizmet sağlayıcıların sunucuları yurt dışında bulunabileceğinden, verileriniz KVKK’nın 9. maddesi çerçevesinde yurt dışına aktarılabilir. Ayrıca yasal bir zorunluluk halinde yetkili kamu kurum ve kuruluşlarıyla paylaşım yapılabilir.',
+        'Yazı tipleri (DM Sans ve Manrope) sitemizin kendi sunucusundan yüklenir. Bu nedenle yazı tipi yüklemesi sırasında IP adresiniz Google’a veya başka bir üçüncü kişiye iletilmez.',
+        'Yukarıdaki hizmet sağlayıcıların bazı sunucuları yurt dışında bulunduğundan, kişisel verileriniz KVKK’nın 9. maddesi uyarınca yurt dışına aktarılabilir. Bu aktarım; yeterli koruma bulunan ülkelere, ya da KVKK’da öngörülen diğer güvencelere (standart sözleşmeler vb.) dayanılarak yapılır. Bu güvencelerin sağlanamadığı hallerde ise yalnızca açık rızanızla aktarım yapılır. Açık rızanızı kayıt ekranında ayrıca vermenizi isteriz; rızanızı istediğiniz zaman geri alabilirsiniz (bkz. Madde 7A, 8 ve 9).',
+        'Ayrıca yasal bir zorunluluk halinde yetkili kamu kurum ve kuruluşlarıyla paylaşım yapılabilir.',
       ],
     },
     {
@@ -105,6 +106,13 @@ const kvkk: LegalDoc = {
           'Yasal saklama yükümlülüğü bulunan veriler: ilgili mevzuatta öngörülen süre kadar.',
         ] },
         'Süre sonunda verileriniz silinir, yok edilir veya anonim hale getirilir.',
+      ],
+    },
+    {
+      title: '7A. Açık rıza ve geri alma',
+      blocks: [
+        'Kişisel verilerinizin yurt dışına aktarılmasının, KVKK’nın 9. maddesinde öngörülen koşulların sağlanamadığı durumlarda, yalnızca açık rızanıza dayanarak yapılmasını öngörüyoruz. Kayıt ve aktivasyon sırasında verdiğiniz açık rıza, ayrıca “Aydınlatma Metni okudum” onayından bağımsızdır.',
+        `Açık rızanızı dilediğiniz zaman ${EMAIL} adresine e-posta göndererek geri alabilirsiniz. Geri alma, geri alma tarihinden önce yapılmış işlemleri etkilemez. Rızanızı geri alırsanız, hesabınızın çalışması için gerekli olan aktarımlar (örneğin giriş ve şifre sıfırlama) sınırlanabilir.`,
       ],
     },
     {
@@ -181,8 +189,8 @@ const gizlilik: LegalDoc = {
         { list: [
           'Cloudflare: sitenin barındırılması, veritabanı ve ağ güvenliği.',
           'Resend: şifre sıfırlama e-postasının gönderilmesi.',
-          'Google Fonts: Manrope ve DM Sans yazı tipleri Google sunucularından yüklenir; bu sırada IP adresiniz Google’a iletilir. Google’ın gizlilik politikası geçerlidir.',
         ] },
+        'Manrope ve DM Sans yazı tipleri sitemizin kendi sunucusundan yüklenir; Google’a bağlantı kurulmaz. Üçüncü taraf analiz veya reklam araçları kullanmıyoruz.',
       ],
     },
     {
@@ -410,4 +418,4 @@ export const legalDocs: Record<string, LegalDoc> = {
   gizlilik,
   'kullanim-kosullari': kosullar,
   'uyelik-sozlesmesi': uyelik,
-}
+      }
