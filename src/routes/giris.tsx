@@ -80,6 +80,7 @@ function LoginPage() {
   const [notice, setNotice] = useState('')
   const [acceptTerms, setAcceptTerms] = useState(false)
   const [acceptKvkk, setAcceptKvkk] = useState(false)
+  const [acceptConsent, setAcceptConsent] = useState(false)
   const callbackStarted = useRef(false)
 
   useEffect(() => {
@@ -104,6 +105,7 @@ function LoginPage() {
     if (next !== 'code' && next !== 'password') {
       setAcceptTerms(false)
       setAcceptKvkk(false)
+      setAcceptConsent(false)
     }
   }
 
@@ -115,9 +117,19 @@ function LoginPage() {
       setError('Şifreler eşleşmiyor.')
       return
     }
-    if (['code', 'password'].includes(step) && !(acceptTerms && acceptKvkk)) {
-      setError('Devam etmek için Üyelik Sözleşmesi’ni ve KVKK Aydınlatma Metni’ni onaylaman gerekiyor.')
-      return
+    if (['code', 'password'].includes(step)) {
+      if (!acceptTerms) {
+        setError('Devam etmek için Üyelik Sözleşmesi’ni ve Kullanım Koşulları’nı kabul etmen gerekiyor.')
+        return
+      }
+      if (!acceptKvkk) {
+        setError('Devam etmek için KVKK Aydınlatma Metni’ni okuduğunu onaylaman gerekiyor.')
+        return
+      }
+      if (!acceptConsent) {
+        setError('Devam etmek için kişisel verilerinin aktarımına ilişkin açık rıza onayını vermen gerekiyor.')
+        return
+      }
     }
     setBusy(true)
     try {
@@ -407,7 +419,33 @@ function LoginPage() {
                       <a href="/gizlilik" target="_blank" rel="noopener noreferrer">
                         Gizlilik ve Çerez Politikası
                       </a>
-                      ’nı okudum, anladım.
+                      ’nı okudum, bilgilendirildim.
+                    </span>
+                  </label>
+                  <label
+                    htmlFor="accept-consent"
+                    style={{
+                      display: 'flex',
+                      gap: 10,
+                      alignItems: 'flex-start',
+                      lineHeight: 1.5,
+                      fontSize: '.92rem',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <input
+                      id="accept-consent"
+                      name="accept-consent"
+                      type="checkbox"
+                      checked={acceptConsent}
+                      onChange={event => setAcceptConsent(event.target.checked)}
+                      required
+                      style={{ width: 20, height: 20, marginTop: 2, flexShrink: 0 }}
+                    />
+                    <span>
+                      <strong>Açık rıza:</strong> Kişisel verilerimin, hizmetin sunulması için kullanılan altyapı
+                      sağlayıcılarına (Cloudflare, Resend) ve bunların yurt dışındaki sunucularına aktarılmasına
+                      ve orada işlenmesine, Aydınlatma Metni’nde belirtilen kapsamda açık rızam ile onay veriyorum.
                     </span>
                   </label>
                 </div>
