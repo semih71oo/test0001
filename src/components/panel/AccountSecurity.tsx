@@ -20,6 +20,7 @@ export function TwoFactorSettings() {
   const [secret, setSecret] = useState('')
   const [code, setCode] = useState('')
   const [password, setPassword] = useState('')
+  const [disableCode, setDisableCode] = useState('')
   const [disabling, setDisabling] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -68,10 +69,11 @@ export function TwoFactorSettings() {
     setBusy(true)
     setError('')
     try {
-      await communityApi('disable-2fa', { password })
+      await communityApi('disable-2fa', { password, code: disableCode })
       setEnabled(false)
       setDisabling(false)
       setPassword('')
+      setDisableCode('')
       setNotice('2FA başarıyla devre dışı bırakıldı.')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Şifre hatalı.')
@@ -92,7 +94,7 @@ export function TwoFactorSettings() {
 
   if (loading) return null
 
-  const otpUrl = `otpauth://totp/SemihAlgan:${username || 'admin'}?secret=${secret}&issuer=SemihAlgan`
+  const otpUrl = `otpauth://totp/SemihAlgan:${encodeURIComponent(username || 'admin')}?secret=${secret}&issuer=SemihAlgan`
 
   return (
     <section className="panel-card" style={{ marginTop: 22 }}>
@@ -127,7 +129,7 @@ export function TwoFactorSettings() {
           ) : (
             <form onSubmit={handleDisable} style={{ marginTop: 12, maxWidth: 360 }}>
               <p style={{ fontSize: '11px', color: '#974d34', marginBottom: 8 }}>
-                Devre dışı bırakmak için mevcut hesap şifrenizi girin:
+                Devre dışı bırakmak için hesap şifrenizi ve Authenticator'daki 6 haneli kodu girin:
               </p>
               <input
                 type="password"
@@ -137,8 +139,18 @@ export function TwoFactorSettings() {
                 onChange={e => setPassword(e.target.value)}
                 style={{ width: '100%', marginBottom: 10, height: 40, padding: '0 10px', borderRadius: 6, border: '1px solid var(--line)', font: 'inherit', fontSize: '12px' }}
               />
+              <input
+                type="text"
+                required
+                inputMode="numeric"
+                maxLength={6}
+                placeholder="6 haneli kod"
+                value={disableCode}
+                onChange={e => setDisableCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                style={{ width: '100%', marginBottom: 10, height: 40, padding: '0 10px', borderRadius: 6, border: '1px solid var(--line)', font: 'inherit', fontSize: '12px' }}
+              />
               <div style={{ display: 'flex', gap: 8 }}>
-                <button type="submit" disabled={busy} className="danger-button">
+                <button type="submit" disabled={busy || disableCode.length !== 6} className="danger-button">
                   {busy ? 'Kaldırılıyor…' : 'Kaldır'}
                 </button>
                 <button type="button" disabled={busy} className="button button-outline" style={{ padding: '6px 12px', fontSize: '11px' }} onClick={() => setDisabling(false)}>
@@ -247,13 +259,13 @@ export function PasswordSettings() {
     try {
       await communityApi('change-password', { currentPassword, password })
       setNotice('Şifren güvenle güncellendi.')
+      setCurrentPassword('')
+      setPassword('')
+      setConfirmation('')
     } catch (caught) {
       setError(caught instanceof Error && caught.message ? caught.message : 'Şifre güncellenemedi. Oturumunu ve bağlantını kontrol et.')
     } finally {
       setBusy(false)
-      setCurrentPassword('')
-      setPassword('')
-      setConfirmation('')
     }
   }
 
