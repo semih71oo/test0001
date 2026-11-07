@@ -289,10 +289,17 @@ const actions: Record<string, { method: 'GET' | 'POST'; run: Handler }> = {
     method: 'POST',
     run: async (request, body) => {
       const s = await requireRole(request, 4)
-      const user = await first<{ password_hash: string }>('SELECT password_hash FROM members WHERE id = ?1', s.id)
+      await rateLimit(request, 'disable-2fa:ip', 5, 15 * 60)
+      const user = await first<{ password_hash: string; two_factor_secret: string | null; two_factor_last_code: string | null }>(
+        'SELECT password_hash, two_factor_secret, two_factor_last_code FROM members WHERE id = ?1', s.id)
       if (!(await verifyPassword(String(body.password ?? ''), user?.password_hash ?? null))) {
         throw new HttpError('Şifreniz hatalı.', 400)
       }
+      const code = String(body.code ?? '').trim()
+      if (!user?.two_factor_secret || !(await verifyTOTP(user.two_factor_secret, code))) {
+        throw new HttpError('Doğrulama kodu hatalı.', 400)
+      }
+      if (user.two_factor_last_code === code) throw new HttpError('Bu kod zaten kullanıldı. Yeni kodu bekle.', 401)
       await run(
         'UPDATE members SET two_factor_enabled = 0, two_factor_secret = NULL, two_factor_last_code = NULL WHERE id = ?1',
         s.id,
