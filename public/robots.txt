@@ -1,4 +1,5 @@
 User-agent: *
+Allow: /api/sitemap
 Disallow: /admin
 Disallow: /panel
 Disallow: /giris
