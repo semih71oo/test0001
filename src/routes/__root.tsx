@@ -3,6 +3,8 @@ import { MaintenanceGate } from '../components/MaintenanceGate'
 import { CookieBanner } from '../components/CookieBanner'
 import { PageLoader } from '../components/PageLoader'
 import { NotFoundPage } from '../components/NotFoundPage'
+import { SmoothScroll } from '../components/SmoothScroll'
+import { MotionConfig } from 'motion/react'
 
 import '../styles.css'
 
@@ -145,12 +147,15 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        <PageLoader />
-        <RouterLoadingBar />
-        <MaintenanceGate />
-        <CookieBanner />
-        {children}
-        <Scripts />
+        <MotionConfig reducedMotion="user">
+          <SmoothScroll />
+          <PageLoader />
+          <RouterLoadingBar />
+          <MaintenanceGate />
+          <CookieBanner />
+          {children}
+          <Scripts />
+        </MotionConfig>
       </body>
     </html>
   )
