@@ -35,6 +35,7 @@ function HomePage() {
     let revealObserver: IntersectionObserver | undefined
     let heroContext: gsap.Context | undefined
     const revealTweens: gsap.core.Tween[] = []
+    const revealSelector = '.values-inner, .software-section .section-heading, .carousel-container, .community-section .section-heading, .community-section .board-description, .community-section .developer-grid, .about-card, .about-copy, .contact-intro, .contact-options'
 
     const startAnimations = () => {
       if (cancelled) return
@@ -67,18 +68,7 @@ function HomePage() {
 
       if (!('IntersectionObserver' in window)) return
 
-      const revealTargets = gsap.utils.toArray<HTMLElement>([
-        '.values-inner',
-        '.software-section .section-heading',
-        '.carousel-container',
-        '.community-section .section-heading',
-        '.community-section .board-description',
-        '.community-section .developer-grid',
-        '.about-card',
-        '.about-copy',
-        '.contact-intro',
-        '.contact-options',
-      ])
+      const revealTargets = gsap.utils.toArray<HTMLElement>(revealSelector)
 
       revealObserver = new IntersectionObserver((entries, observer) => {
         entries.forEach(entry => {
@@ -121,18 +111,7 @@ function HomePage() {
       revealObserver?.disconnect()
       revealTweens.forEach(tween => tween.kill())
       heroContext?.revert()
-      gsap.utils.toArray<HTMLElement>([
-        '.values-inner',
-        '.software-section .section-heading',
-        '.carousel-container',
-        '.community-section .section-heading',
-        '.community-section .board-description',
-        '.community-section .developer-grid',
-        '.about-card',
-        '.about-copy',
-        '.contact-intro',
-        '.contact-options',
-      ]).forEach(target => gsap.set(target, { clearProps: 'all' }))
+      gsap.utils.toArray<HTMLElement>(revealSelector).forEach(target => gsap.set(target, { clearProps: 'all' }))
     }
   }, [])
 
