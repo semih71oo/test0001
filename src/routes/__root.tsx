@@ -116,8 +116,10 @@ export const Route = createRootRoute({
     ],
     scripts: [
       {
-        // Aynı sekmede daha önce yüklendiyse yükleme ekranı bir daha gösterilmez (ilk boyamadan önce çalışır)
         children: `try{if(sessionStorage.getItem('sa-loaded'))document.documentElement.classList.add('sa-skip-loader')}catch(e){}`,
+      },
+      {
+        children: `window.setTimeout(function(){document.documentElement.classList.add('sa-loader-timeout')},8000);`,
       },
       {
         type: 'application/ld+json',
