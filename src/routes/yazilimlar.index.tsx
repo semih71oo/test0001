@@ -56,7 +56,6 @@ function SoftwarePage() {
                 idleIntensity={0.3}
                 followMouse
                 autoAnimate={false}
-                className="software-card-action"
                 style={{ backgroundColor: '#245c45', minHeight: 44 }}
                 onClick={() => window.location.assign(item.href)}
                 aria-label={`${item.title} projesini incele`}
