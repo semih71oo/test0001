@@ -16,7 +16,7 @@ export function SmoothScroll() {
       if (!lenis) {
         lenis = new Lenis({
           autoRaf: true,
-          anchors: true,
+          anchors: { duration: 2.2, lerp: 0 },
           smoothWheel: true,
           syncTouch: false,
         })
