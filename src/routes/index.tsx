@@ -30,33 +30,110 @@ function HomePage() {
     const hero = heroRef.current
     if (!hero || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
 
-    const context = gsap.context(() => {
-      const copyItems = gsap.utils.toArray<HTMLElement>('.hero-copy > *')
-      const artwork = hero.querySelector<HTMLElement>('.hero-art')
+    let cancelled = false
+    let loaderObserver: MutationObserver | undefined
+    let revealObserver: IntersectionObserver | undefined
+    let heroContext: gsap.Context | undefined
+    const revealTweens: gsap.core.Tween[] = []
 
-      gsap.set(copyItems, { autoAlpha: 0, y: 22 })
-      if (artwork) gsap.set(artwork, { autoAlpha: 0, y: 18 })
+    const startAnimations = () => {
+      if (cancelled) return
 
-      const timeline = gsap.timeline({ defaults: { ease: 'power3.out' } })
-      timeline.to(copyItems, {
-        autoAlpha: 1,
-        y: 0,
-        duration: 0.7,
-        stagger: 0.1,
-        clearProps: 'all',
-      })
+      heroContext = gsap.context(() => {
+        const copyItems = gsap.utils.toArray<HTMLElement>('.hero-copy > *')
+        const artwork = hero.querySelector<HTMLElement>('.hero-art')
 
-      if (artwork) {
-        timeline.to(artwork, {
+        gsap.set(copyItems, { autoAlpha: 0, y: 22 })
+        if (artwork) gsap.set(artwork, { autoAlpha: 0, y: 18 })
+
+        const timeline = gsap.timeline({ defaults: { ease: 'power3.out' } })
+        timeline.to(copyItems, {
           autoAlpha: 1,
           y: 0,
-          duration: 0.9,
+          duration: 0.7,
+          stagger: 0.1,
           clearProps: 'all',
-        }, '-=0.55')
-      }
-    }, hero)
+        })
 
-    return () => context.revert()
+        if (artwork) {
+          timeline.to(artwork, {
+            autoAlpha: 1,
+            y: 0,
+            duration: 0.9,
+            clearProps: 'all',
+          }, '-=0.55')
+        }
+      }, hero)
+
+      if (!('IntersectionObserver' in window)) return
+
+      const revealTargets = gsap.utils.toArray<HTMLElement>([
+        '.values-inner',
+        '.software-section .section-heading',
+        '.carousel-container',
+        '.community-section .section-heading',
+        '.community-section .board-description',
+        '.community-section .developer-grid',
+        '.about-card',
+        '.about-copy',
+        '.contact-intro',
+        '.contact-options',
+      ])
+
+      revealObserver = new IntersectionObserver((entries, observer) => {
+        entries.forEach(entry => {
+          if (!entry.isIntersecting) return
+          revealTweens.push(gsap.fromTo(entry.target,
+            { autoAlpha: 0, y: 26 },
+            {
+              autoAlpha: 1,
+              y: 0,
+              duration: 0.75,
+              ease: 'power3.out',
+              clearProps: 'all',
+            },
+          ))
+          observer.unobserve(entry.target)
+        })
+      }, { threshold: 0.16, rootMargin: '0px 0px -7% 0px' })
+
+      revealTargets.forEach(target => {
+        gsap.set(target, { autoAlpha: 0, y: 26 })
+        revealObserver?.observe(target)
+      })
+    }
+
+    const loader = document.querySelector('.sa-loader')
+    if (loader && !document.documentElement.classList.contains('sa-skip-loader')) {
+      loaderObserver = new MutationObserver(() => {
+        if (document.querySelector('.sa-loader')) return
+        loaderObserver?.disconnect()
+        startAnimations()
+      })
+      loaderObserver.observe(document.body, { childList: true, subtree: true })
+    } else {
+      startAnimations()
+    }
+
+    return () => {
+      cancelled = true
+      loaderObserver?.disconnect()
+      revealObserver?.disconnect()
+      revealTweens.forEach(tween => tween.kill())
+      heroContext?.revert()
+      gsap.utils.toArray<HTMLElement>([
+        '.values-inner',
+        '.software-section .section-heading',
+        '.carousel-container',
+        '.community-section .section-heading',
+        '.community-section .board-description',
+        '.community-section .developer-grid',
+        '.about-card',
+        '.about-copy',
+        '.contact-intro',
+        '.contact-options',
+      ]).forEach(target => gsap.set(target, { clearProps: 'all' }))
+    }
   }, [])
 
   const panelHref = signedIn ? (signedIn.isAdmin ? '/admin' : '/panel') : '/giris'
