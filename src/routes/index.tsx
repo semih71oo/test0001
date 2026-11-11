@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
 import { gsap } from 'gsap'
 import { motion } from 'motion/react'
+import BlurText from '../components/animations/BlurText'
 import { DeveloperBoard } from '../components/DeveloperBoard'
 import { SoftwareCarousel } from '../components/SoftwareCarousel'
 import { softwareList } from '../lib/software'
@@ -173,7 +174,7 @@ function HomePage() {
         <section ref={heroRef} className="hero container" aria-labelledby="hero-title">
           <div className="hero-copy">
             <div className="eyebrow"><span className="status-dot" /> FİKİRDEN KODA, KODDAN HAYATA</div>
-            <h1 id="hero-title">İyi fikirler,<br /><span>güçlü yazılımlar.</span></h1>
+            <h1 id="hero-title"><BlurText text="İyi fikirler," delay={110} blur={8} distance={22} /><br /><span className="hero-title-accent"><BlurText text="güçlü yazılımlar." delay={110} blur={8} distance={22} /></span></h1>
             <p className="hero-description">Merhaba, ben Semih. Fikirleri kodla buluşturuyor,<br className="desktop-break" /> kullanışlı ve özenle tasarlanmış yazılımlar geliştiriyorum.</p>
             <div className="hero-actions">
               <motion.a className="button button-primary" href="/yazilimlar" whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} transition={{ type: 'spring', stiffness: 420, damping: 24 }}>Yazılımları keşfet <ArrowUpRight size={19} /></motion.a>
@@ -213,7 +214,7 @@ function HomePage() {
           <div className="section-heading">
             <div>
               <div className="eyebrow section-eyebrow">01 / YAZILIMLAR</div>
-              <h2 id="software-title">Geliştirdiğim Yazılımlar<span className="heading-dot">.</span></h2>
+              <h2 id="software-title"><BlurText text="Geliştirdiğim Yazılımlar" delay={90} blur={7} distance={18} /><span className="heading-dot">.</span></h2>
             </div>
             <a href="/yazilimlar" className="pill hover:border-emerald-500 transition" style={{ textDecoration: 'none' }}>
               <span className="status-dot" /> Tümünü Gör ({softwareList.length}) <ArrowUpRight size={14} style={{ display: 'inline', marginLeft: 4 }} />
@@ -237,7 +238,7 @@ function HomePage() {
           </div>
           <div className="about-copy">
             <div className="eyebrow section-eyebrow">02 / HAKKIMDA</div>
-            <h2 id="about-title">Merakla başladı.<br /><span>Kodla devam ediyor.</span></h2>
+            <h2 id="about-title"><BlurText text="Merakla başladı." delay={100} blur={7} distance={18} /><br /><span className="about-title-accent"><BlurText text="Kodla devam ediyor." delay={100} blur={7} distance={18} /></span></h2>
             <p>Ben Semih Algan. 26 Mayıs 2011’de Kırıkkale’nin Merkez ilçesinde doğdum. Yazılım geliştirmeyi seven, fikirlerini hayata geçirmekten keyif alan bir geliştiriciyim.</p>
             <p>Basketbol ve satrançla ilgileniyorum. Sahada takım ruhunu, satrançta stratejik düşünmeyi seviyorum. Aynı merakı ve çözüm odaklı bakışı yazılımlarıma da taşıyorum.</p>
             <div className="interest-tags">
@@ -254,7 +255,7 @@ function HomePage() {
           <div className="container contact-inner">
             <div className="contact-intro">
               <div className="eyebrow section-eyebrow">03 / İLETİŞİM</div>
-              <h2 id="contact-title">Bir fikirle<br />başlayabiliriz<span>.</span></h2>
+              <h2 id="contact-title"><BlurText text="Bir fikirle" delay={100} blur={7} distance={18} /><br /><span className="contact-title-accent"><BlurText text="başlayabiliriz" delay={100} blur={7} distance={18} /></span><span>.</span></h2>
               <p>Bir sorunun, önerin ya da paylaşmak istediğin<br className="desktop-break" /> bir fikrin varsa, bana ulaşabilirsin.</p>
               <span className="contact-signature">Güzel işler, bir merhabayla başlar. <ArrowDownRight size={22} /></span>
             </div>
