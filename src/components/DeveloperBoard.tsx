@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import BlurText from './animations/BlurText'
 import { Code2, Crown, Palette, Shield, Users } from 'lucide-react'
 import { communityApi, developerRoles } from '../lib/community'
 import type { Developer, DeveloperRole } from '../lib/community'
@@ -46,5 +47,5 @@ export function DeveloperBoard() {
     return () => { active = false }
   }, [reloadKey])
 
-  return <section className="container section-space community-section" id="pano" aria-labelledby="board-title"><div className="section-heading"><div><span className="section-eyebrow">BİRLİKTE DAHA İLERİ</span><h2 id="board-title">Geliştiriciler<span className="heading-dot">.</span></h2></div></div><p className="board-description">Fikirlerin arkasındaki isimler. Her rol, aynı panoda.</p><div aria-live="polite" aria-busy={state === 'loading'}>{state === 'loading' ? <div className="developer-grid board-skeleton" aria-label="Geliştiriciler yükleniyor">{[1, 2, 3].map(item => <div className="skeleton-card" key={item}><span /><span /><span /></div>)}</div> : state === 'error' ? <div className="board-empty"><Users size={27} /><h3>Pano şu an yüklenemiyor.</h3><p>Bağlantıyı kontrol edip tekrar deneyebilirsin.</p><button className="button button-outline" type="button" onClick={() => setReloadKey(key => key + 1)}>Tekrar dene</button></div> : <DeveloperCards developers={developers} />}</div></section>
+  return <section className="container section-space community-section" id="pano" aria-labelledby="board-title"><div className="section-heading"><div><span className="section-eyebrow">BİRLİKTE DAHA İLERİ</span><h2 id="board-title"><BlurText text="Geliştiriciler" delay={90} blur={7} distance={18} /><span className="heading-dot">.</span></h2></div></div><p className="board-description">Fikirlerin arkasındaki isimler. Her rol, aynı panoda.</p><div aria-live="polite" aria-busy={state === 'loading'}>{state === 'loading' ? <div className="developer-grid board-skeleton" aria-label="Geliştiriciler yükleniyor">{[1, 2, 3].map(item => <div className="skeleton-card" key={item}><span /><span /><span /></div>)}</div> : state === 'error' ? <div className="board-empty"><Users size={27} /><h3>Pano şu an yüklenemiyor.</h3><p>Bağlantıyı kontrol edip tekrar deneyebilirsin.</p><button className="button button-outline" type="button" onClick={() => setReloadKey(key => key + 1)}>Tekrar dene</button></div> : <DeveloperCards developers={developers} />}</div></section>
 }

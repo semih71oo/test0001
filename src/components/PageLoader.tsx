@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react'
 
-const MIN_VISIBLE_MS = 700 // çok hızlı açılsa bile ekran "çakmasın"
-const MAX_WAIT_MS = 8000 // takılırsa kendini kapatır
+const MIN_VISIBLE_MS = 700
+const MAX_WAIT_MS = 8000
 const FADE_MS = 600
 
-// Çam yeşili nefes alan yükleme ekranı (siteyle aynı palet: #245c45 / krem #fafaf6)
 const css = `
 .sa-loader{position:fixed;inset:0;z-index:2147482999;display:grid;place-items:center;background:rgba(250,250,246,.92);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);opacity:1;transition:opacity ${FADE_MS}ms ease}
 .sa-loader[data-leaving="true"]{opacity:0;pointer-events:none}
@@ -16,7 +15,7 @@ const css = `
 @keyframes sa-breathe{0%,100%{transform:scale(.82);opacity:.85}50%{transform:scale(1);opacity:1}}
 @keyframes sa-halo{0%{transform:scale(.9);opacity:.6}70%,100%{transform:scale(1.9);opacity:0}}
 @media (prefers-reduced-motion:reduce){.sa-loader-orb::before,.sa-loader-orb::after{animation:none}.sa-loader-orb::after{display:none}}
-html.sa-skip-loader .sa-loader{display:none}
+html.sa-skip-loader .sa-loader,html.sa-loader-timeout .sa-loader{display:none!important}
 `
 
 export function PageLoader() {
@@ -39,12 +38,16 @@ export function PageLoader() {
       }, wait))
     }
 
-    if (document.readyState === 'complete') finish()
-    else window.addEventListener('load', finish, { once: true })
+    const finishAfterResources = () => {
+      document.fonts.ready.then(finish, finish)
+    }
+
+    if (document.readyState === 'complete') finishAfterResources()
+    else window.addEventListener('load', finishAfterResources, { once: true })
     timers.push(window.setTimeout(finish, MAX_WAIT_MS))
 
     return () => {
-      window.removeEventListener('load', finish)
+      window.removeEventListener('load', finishAfterResources)
       timers.forEach(window.clearTimeout)
     }
   }, [])

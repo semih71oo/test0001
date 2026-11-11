@@ -77,7 +77,7 @@ const buildEffect = (
   distance: number
 ): EffectConfig => {
   const [axis, sign] = AXES[direction] || AXES.top;
-  const b = Math.max(0, blur);
+  const b = Math.min(3, Math.max(0, blur));
   const d = distance;
 
   if (effect === 'zoom') {
@@ -235,7 +235,7 @@ const BlurText = ({
   fromColor,
   focusOnHover = false
 }: BlurTextProps) => {
-  const ref = useRef<HTMLParagraphElement>(null);
+  const ref = useRef<HTMLSpanElement>(null);
   const [phase, setPhase] = useState<Phase>(() => startPhase(trigger));
   const firstPhase = useRef(phase).current;
   const [focusWord, setFocusWord] = useState(-1);
@@ -388,7 +388,7 @@ const BlurText = ({
       <motion.span
         aria-hidden="true"
         key={piece.key}
-        className="inline-block will-change-[transform,filter,opacity]"
+        className="inline-block"
         style={style}
         initial={firstPhase === 'rest' ? false : fromSnapshot}
         animate={target}
@@ -411,9 +411,9 @@ const BlurText = ({
 
   return (
     <MotionConfig reducedMotion="user">
-      <p
+      <span
         ref={ref}
-        className={`blur-text flex flex-wrap ${trigger === 'click' ? 'cursor-pointer' : ''} ${className}`}
+        className={`blur-text inline ${trigger === 'click' ? 'cursor-pointer' : ''} ${className}`}
         style={{ color }}
         onPointerEnter={trigger === 'hover' ? handleEnter : undefined}
         onClick={trigger === 'click' ? replay : undefined}
@@ -430,7 +430,7 @@ const BlurText = ({
             {indices.map(renderPiece)}
           </span>
         ))}
-      </p>
+      </span>
     </MotionConfig>
   );
 };

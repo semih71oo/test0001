@@ -1,5 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { gsap } from 'gsap'
+import { motion } from 'motion/react'
+import BlurText from '../components/animations/BlurText'
 import { DeveloperBoard } from '../components/DeveloperBoard'
 import { SoftwareCarousel } from '../components/SoftwareCarousel'
 import { softwareList } from '../lib/software'
@@ -10,6 +13,7 @@ export const Route = createFileRoute('/')({
 })
 
 function HomePage() {
+  const heroRef = useRef<HTMLElement>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [copyStatus, setCopyStatus] = useState('')
   const [signedIn, setSignedIn] = useState<{ isAdmin: boolean } | null>(null)
@@ -21,6 +25,95 @@ function HomePage() {
       .then(data => { if (active && data) setSignedIn({ isAdmin: !!data.isAdmin }) })
       .catch(() => undefined)
     return () => { active = false }
+  }, [])
+
+  useEffect(() => {
+    const hero = heroRef.current
+    if (!hero || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+
+    let cancelled = false
+    let loaderObserver: MutationObserver | undefined
+    let revealObserver: IntersectionObserver | undefined
+    let heroContext: gsap.Context | undefined
+    const revealTweens: gsap.core.Tween[] = []
+    const revealSelector = '.values-inner, .software-section .section-heading, .carousel-container, .community-section .section-heading, .community-section .board-description, .community-section .developer-grid, .about-card, .about-copy, .contact-intro, .contact-options'
+
+    const startAnimations = () => {
+      if (cancelled) return
+
+      heroContext = gsap.context(() => {
+        const copyItems = gsap.utils.toArray<HTMLElement>('.hero-copy > *')
+        const artwork = hero.querySelector<HTMLElement>('.hero-art')
+
+        gsap.set(copyItems, { autoAlpha: 0, y: 22 })
+        if (artwork) gsap.set(artwork, { autoAlpha: 0, y: 18 })
+
+        const timeline = gsap.timeline({ defaults: { ease: 'power3.out' } })
+        timeline.to(copyItems, {
+          autoAlpha: 1,
+          y: 0,
+          duration: 0.7,
+          stagger: 0.1,
+          clearProps: 'all',
+        })
+
+        if (artwork) {
+          timeline.to(artwork, {
+            autoAlpha: 1,
+            y: 0,
+            duration: 0.9,
+            clearProps: 'all',
+          }, '-=0.55')
+        }
+      }, hero)
+
+      if (!('IntersectionObserver' in window)) return
+
+      const revealTargets = gsap.utils.toArray<HTMLElement>(revealSelector)
+
+      revealObserver = new IntersectionObserver((entries, observer) => {
+        entries.forEach(entry => {
+          if (!entry.isIntersecting) return
+          revealTweens.push(gsap.fromTo(entry.target,
+            { autoAlpha: 0, y: 26 },
+            {
+              autoAlpha: 1,
+              y: 0,
+              duration: 0.75,
+              ease: 'power3.out',
+              clearProps: 'all',
+            },
+          ))
+          observer.unobserve(entry.target)
+        })
+      }, { threshold: 0.16, rootMargin: '0px 0px -7% 0px' })
+
+      revealTargets.forEach(target => {
+        gsap.set(target, { autoAlpha: 0, y: 26 })
+        revealObserver?.observe(target)
+      })
+    }
+
+    const loader = document.querySelector('.sa-loader')
+    if (loader && !document.documentElement.classList.contains('sa-skip-loader')) {
+      loaderObserver = new MutationObserver(() => {
+        if (document.querySelector('.sa-loader')) return
+        loaderObserver?.disconnect()
+        startAnimations()
+      })
+      loaderObserver.observe(document.body, { childList: true, subtree: true })
+    } else {
+      startAnimations()
+    }
+
+    return () => {
+      cancelled = true
+      loaderObserver?.disconnect()
+      revealObserver?.disconnect()
+      revealTweens.forEach(tween => tween.kill())
+      heroContext?.revert()
+      gsap.utils.toArray<HTMLElement>(revealSelector).forEach(target => gsap.set(target, { clearProps: 'all' }))
+    }
   }, [])
 
   const panelHref = signedIn ? (signedIn.isAdmin ? '/admin' : '/panel') : '/giris'
@@ -78,14 +171,14 @@ function HomePage() {
       {/* ANA İÇERİK */}
       <main id="icerik">
         {/* HERO BÖLÜMÜ */}
-        <section className="hero container" aria-labelledby="hero-title">
+        <section ref={heroRef} className="hero container" aria-labelledby="hero-title">
           <div className="hero-copy">
             <div className="eyebrow"><span className="status-dot" /> FİKİRDEN KODA, KODDAN HAYATA</div>
-            <h1 id="hero-title">İyi fikirler,<br /><span>güçlü yazılımlar.</span></h1>
+            <h1 id="hero-title"><BlurText text="İyi fikirler," delay={110} blur={8} distance={22} /><br /><span className="hero-title-accent"><BlurText text="güçlü yazılımlar." delay={110} blur={8} distance={22} /></span></h1>
             <p className="hero-description">Merhaba, ben Semih. Fikirleri kodla buluşturuyor,<br className="desktop-break" /> kullanışlı ve özenle tasarlanmış yazılımlar geliştiriyorum.</p>
             <div className="hero-actions">
-              <a className="button button-primary" href="/yazilimlar">Yazılımları keşfet <ArrowUpRight size={19} /></a>
-              <a className="button button-text" href="#hakkimda">Beni tanı <ArrowRight size={18} /></a>
+              <motion.a className="button button-primary" href="/yazilimlar" whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} transition={{ type: 'spring', stiffness: 420, damping: 24 }}>Yazılımları keşfet <ArrowUpRight size={19} /></motion.a>
+              <motion.a className="button button-text" href="#hakkimda" whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} transition={{ type: 'spring', stiffness: 420, damping: 24 }}>Beni tanı <ArrowRight size={18} /></motion.a>
             </div>
             <div className="hero-note"><span className="mini-avatar">sa.</span><span>Bir geliştirici. Birçok fikir.<br /><strong>Her zaman daha iyisinin peşinde.</strong></span></div>
           </div>
@@ -121,7 +214,7 @@ function HomePage() {
           <div className="section-heading">
             <div>
               <div className="eyebrow section-eyebrow">01 / YAZILIMLAR</div>
-              <h2 id="software-title">Geliştirdiğim Yazılımlar<span className="heading-dot">.</span></h2>
+              <h2 id="software-title"><BlurText text="Geliştirdiğim Yazılımlar" delay={90} blur={7} distance={18} /><span className="heading-dot">.</span></h2>
             </div>
             <a href="/yazilimlar" className="pill hover:border-emerald-500 transition" style={{ textDecoration: 'none' }}>
               <span className="status-dot" /> Tümünü Gör ({softwareList.length}) <ArrowUpRight size={14} style={{ display: 'inline', marginLeft: 4 }} />
@@ -145,7 +238,7 @@ function HomePage() {
           </div>
           <div className="about-copy">
             <div className="eyebrow section-eyebrow">02 / HAKKIMDA</div>
-            <h2 id="about-title">Merakla başladı.<br /><span>Kodla devam ediyor.</span></h2>
+            <h2 id="about-title"><BlurText text="Merakla başladı." delay={100} blur={7} distance={18} /><br /><span className="about-title-accent"><BlurText text="Kodla devam ediyor." delay={100} blur={7} distance={18} /></span></h2>
             <p>Ben Semih Algan. 26 Mayıs 2011’de Kırıkkale’nin Merkez ilçesinde doğdum. Yazılım geliştirmeyi seven, fikirlerini hayata geçirmekten keyif alan bir geliştiriciyim.</p>
             <p>Basketbol ve satrançla ilgileniyorum. Sahada takım ruhunu, satrançta stratejik düşünmeyi seviyorum. Aynı merakı ve çözüm odaklı bakışı yazılımlarıma da taşıyorum.</p>
             <div className="interest-tags">
@@ -162,7 +255,7 @@ function HomePage() {
           <div className="container contact-inner">
             <div className="contact-intro">
               <div className="eyebrow section-eyebrow">03 / İLETİŞİM</div>
-              <h2 id="contact-title">Bir fikirle<br />başlayabiliriz<span>.</span></h2>
+              <h2 id="contact-title"><BlurText text="Bir fikirle" delay={100} blur={7} distance={18} /><br /><span className="contact-title-accent"><BlurText text="başlayabiliriz" delay={100} blur={7} distance={18} /></span><span>.</span></h2>
               <p>Bir sorunun, önerin ya da paylaşmak istediğin<br className="desktop-break" /> bir fikrin varsa, bana ulaşabilirsin.</p>
               <span className="contact-signature">Güzel işler, bir merhabayla başlar. <ArrowDownRight size={22} /></span>
             </div>

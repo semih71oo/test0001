@@ -3,6 +3,8 @@ import { MaintenanceGate } from '../components/MaintenanceGate'
 import { CookieBanner } from '../components/CookieBanner'
 import { PageLoader } from '../components/PageLoader'
 import { NotFoundPage } from '../components/NotFoundPage'
+import { SmoothScroll } from '../components/SmoothScroll'
+import { MotionConfig } from 'motion/react'
 
 import '../styles.css'
 
@@ -114,8 +116,10 @@ export const Route = createRootRoute({
     ],
     scripts: [
       {
-        // Aynı sekmede daha önce yüklendiyse yükleme ekranı bir daha gösterilmez (ilk boyamadan önce çalışır)
         children: `try{if(sessionStorage.getItem('sa-loaded'))document.documentElement.classList.add('sa-skip-loader')}catch(e){}`,
+      },
+      {
+        children: `window.setTimeout(function(){document.documentElement.classList.add('sa-loader-timeout')},8000);`,
       },
       {
         type: 'application/ld+json',
@@ -145,12 +149,15 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        <PageLoader />
-        <RouterLoadingBar />
-        <MaintenanceGate />
-        <CookieBanner />
-        {children}
-        <Scripts />
+        <MotionConfig reducedMotion="user">
+          <SmoothScroll />
+          <PageLoader />
+          <RouterLoadingBar />
+          <MaintenanceGate />
+          <CookieBanner />
+          {children}
+          <Scripts />
+        </MotionConfig>
       </body>
     </html>
   )
