@@ -1,5 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { gsap } from 'gsap'
+import { motion } from 'motion/react'
 import { DeveloperBoard } from '../components/DeveloperBoard'
 import { SoftwareCarousel } from '../components/SoftwareCarousel'
 import { softwareList } from '../lib/software'
@@ -10,6 +12,7 @@ export const Route = createFileRoute('/')({
 })
 
 function HomePage() {
+  const heroRef = useRef<HTMLElement>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [copyStatus, setCopyStatus] = useState('')
   const [signedIn, setSignedIn] = useState<{ isAdmin: boolean } | null>(null)
@@ -21,6 +24,39 @@ function HomePage() {
       .then(data => { if (active && data) setSignedIn({ isAdmin: !!data.isAdmin }) })
       .catch(() => undefined)
     return () => { active = false }
+  }, [])
+
+  useEffect(() => {
+    const hero = heroRef.current
+    if (!hero || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+
+    const context = gsap.context(() => {
+      const copyItems = gsap.utils.toArray<HTMLElement>('.hero-copy > *')
+      const artwork = hero.querySelector<HTMLElement>('.hero-art')
+
+      gsap.set(copyItems, { autoAlpha: 0, y: 22 })
+      if (artwork) gsap.set(artwork, { autoAlpha: 0, y: 18 })
+
+      const timeline = gsap.timeline({ defaults: { ease: 'power3.out' } })
+      timeline.to(copyItems, {
+        autoAlpha: 1,
+        y: 0,
+        duration: 0.7,
+        stagger: 0.1,
+        clearProps: 'all',
+      })
+
+      if (artwork) {
+        timeline.to(artwork, {
+          autoAlpha: 1,
+          y: 0,
+          duration: 0.9,
+          clearProps: 'all',
+        }, '-=0.55')
+      }
+    }, hero)
+
+    return () => context.revert()
   }, [])
 
   const panelHref = signedIn ? (signedIn.isAdmin ? '/admin' : '/panel') : '/giris'
@@ -78,14 +114,14 @@ function HomePage() {
       {/* ANA İÇERİK */}
       <main id="icerik">
         {/* HERO BÖLÜMÜ */}
-        <section className="hero container" aria-labelledby="hero-title">
+        <section ref={heroRef} className="hero container" aria-labelledby="hero-title">
           <div className="hero-copy">
             <div className="eyebrow"><span className="status-dot" /> FİKİRDEN KODA, KODDAN HAYATA</div>
             <h1 id="hero-title">İyi fikirler,<br /><span>güçlü yazılımlar.</span></h1>
             <p className="hero-description">Merhaba, ben Semih. Fikirleri kodla buluşturuyor,<br className="desktop-break" /> kullanışlı ve özenle tasarlanmış yazılımlar geliştiriyorum.</p>
             <div className="hero-actions">
-              <a className="button button-primary" href="/yazilimlar">Yazılımları keşfet <ArrowUpRight size={19} /></a>
-              <a className="button button-text" href="#hakkimda">Beni tanı <ArrowRight size={18} /></a>
+              <motion.a className="button button-primary" href="/yazilimlar" whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} transition={{ type: 'spring', stiffness: 420, damping: 24 }}>Yazılımları keşfet <ArrowUpRight size={19} /></motion.a>
+              <motion.a className="button button-text" href="#hakkimda" whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} transition={{ type: 'spring', stiffness: 420, damping: 24 }}>Beni tanı <ArrowRight size={18} /></motion.a>
             </div>
             <div className="hero-note"><span className="mini-avatar">sa.</span><span>Bir geliştirici. Birçok fikir.<br /><strong>Her zaman daha iyisinin peşinde.</strong></span></div>
           </div>
