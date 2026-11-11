@@ -161,6 +161,7 @@ const gizlilik: LegalDoc = {
         { list: [
           'Hesap bilgileri: kullanıcı adı ve e-posta adresi.',
           'Şifreniz düz metin olarak saklanmaz; yalnızca geri döndürülemez özet olarak tutulur ve yöneticiler dahil kimse tarafından görüntülenemez.',
+          'Yönetici hesaplarında iki faktörlü doğrulama için kullanılan kimlik doğrulama sırrı ve son doğrulama kodu güvenlik amacıyla işlenir.',
           'Yorumlarınız, yorum düzenleme geçmişiniz ve beğenileriniz.',
           'Güvenlik amacıyla IP adresi ve bundan türetilen özetler; bazı hız sınırlaması kayıtlarında IP adresi doğrudan anahtarın parçası olarak kullanılabilir.',
         ] },
@@ -170,7 +171,7 @@ const gizlilik: LegalDoc = {
     {
       title: '3. Bilgilerin kullanımı',
       blocks: [
-        'Bilgileriniz yalnızca hesabınızı yönetmek, giriş yapmanızı sağlamak, şifre sıfırlama e-postası göndermek, yorum ve beğeni özelliklerini sunmak ve siteyi kötüye kullanıma karşı korumak için kullanılır.',
+        'Bilgileriniz hesabınızı yönetmek, giriş ve iki faktörlü doğrulamayı sağlamak, şifre sıfırlama e-postası göndermek, yorum ve beğeni özelliklerini sunmak, moderasyonu yürütmek ve siteyi kötüye kullanıma karşı korumak için kullanılır.',
       ],
     },
     {
