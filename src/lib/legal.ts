@@ -348,7 +348,7 @@ const uyelik: LegalDoc = {
     {
       title: '7. Süre ve fesih',
       blocks: [
-        'Sözleşme, üyelik onayıyla yürürlüğe girer ve üyelik sürdüğü müddetçe devam eder. Üye, ${EMAIL} adresine başvurarak hesabının kapatılmasını isteyebilir. Site sahibi, güvenlik veya sözleşme ihlali şüphesinde ölçülü ve gerekli geçici kısıtlamalar uygulayabilir; mümkün olduğunda üyeye gerekçe ve itiraz/inceleme yolu bildirilir. Hesap kapatıldığında kişisel veriler, silme talebi ve saklama yükümlülükleri değerlendirilerek silinir, yok edilir veya anonim hâle getirilir; yorum geçmişi ve moderasyon kayıtları için gerekli saklama ayrıca değerlendirilir.',
+        `Sözleşme, üyelik onayıyla yürürlüğe girer ve üyelik sürdüğü müddetçe devam eder. Üye, ${EMAIL} adresine başvurarak hesabının kapatılmasını isteyebilir. Site sahibi, güvenlik veya sözleşme ihlali şüphesinde ölçülü ve gerekli geçici kısıtlamalar uygulayabilir; mümkün olduğunda üyeye gerekçe ve itiraz/inceleme yolu bildirilir. Hesap kapatıldığında kişisel veriler, silme talebi ve saklama yükümlülükleri değerlendirilerek silinir, yok edilir veya anonim hâle getirilir; yorum geçmişi ve moderasyon kayıtları için gerekli saklama ayrıca değerlendirilir.`,
       ],
     },
     {
