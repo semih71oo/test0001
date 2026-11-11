@@ -71,13 +71,6 @@ export function CookieBanner() {
         >
           Anladım
         </button>
-        <button 
-          className="button" 
-          onClick={handleDismiss} 
-          style={{ flex: 1, padding: '12px', justifyContent: 'center', background: '#f0f4e9', border: '1px solid #dce4d4', color: '#4a5d52' }}
-        >
-          Kapat
-        </button>
       </div>
     </div>
   )
