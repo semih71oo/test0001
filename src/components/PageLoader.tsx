@@ -38,12 +38,16 @@ export function PageLoader() {
       }, wait))
     }
 
-    if (document.readyState === 'complete') finish()
-    else window.addEventListener('load', finish, { once: true })
+    const finishAfterResources = () => {
+      document.fonts.ready.then(finish, finish)
+    }
+
+    if (document.readyState === 'complete') finishAfterResources()
+    else window.addEventListener('load', finishAfterResources, { once: true })
     timers.push(window.setTimeout(finish, MAX_WAIT_MS))
 
     return () => {
-      window.removeEventListener('load', finish)
+      window.removeEventListener('load', finishAfterResources)
       timers.forEach(window.clearTimeout)
     }
   }, [])
