@@ -235,7 +235,7 @@ const BlurText = ({
   fromColor,
   focusOnHover = false
 }: BlurTextProps) => {
-  const ref = useRef<HTMLParagraphElement>(null);
+  const ref = useRef<HTMLSpanElement>(null);
   const [phase, setPhase] = useState<Phase>(() => startPhase(trigger));
   const firstPhase = useRef(phase).current;
   const [focusWord, setFocusWord] = useState(-1);
@@ -411,7 +411,7 @@ const BlurText = ({
 
   return (
     <MotionConfig reducedMotion="user">
-      <p
+      <span
         ref={ref}
         className={`blur-text flex flex-wrap ${trigger === 'click' ? 'cursor-pointer' : ''} ${className}`}
         style={{ color }}
@@ -430,7 +430,7 @@ const BlurText = ({
             {indices.map(renderPiece)}
           </span>
         ))}
-      </p>
+      </span>
     </MotionConfig>
   );
 };
