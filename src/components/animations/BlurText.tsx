@@ -77,7 +77,7 @@ const buildEffect = (
   distance: number
 ): EffectConfig => {
   const [axis, sign] = AXES[direction] || AXES.top;
-  const b = Math.max(0, blur);
+  const b = Math.min(3, Math.max(0, blur));
   const d = distance;
 
   if (effect === 'zoom') {
