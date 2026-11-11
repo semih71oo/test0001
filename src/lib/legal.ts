@@ -12,7 +12,7 @@ export type LegalDoc = {
 
 const EMAIL = '71.semih.algan@gmail.com'
 const SITE = 'semihalgan.com.tr'
-const UPDATED = '28 Ekim 2026'
+const UPDATED = '11 Kasım 2026'
 
 export const legalLinks = [
   { path: '/kunye', label: 'Künye' },
@@ -43,9 +43,9 @@ const kvkk: LegalDoc = {
         { list: [
           'Kimlik ve hesap bilgileri: kullanıcı adı, hesap durumu, hesap oluşturma tarihi.',
           'İletişim bilgisi: yönetici tarafından davet sırasında kaydedilen e-posta adresi.',
-          'Doğrulama bilgileri: şifre (yalnızca geri döndürülemez özet olarak), aktivasyon kodu ve şifre sıfırlama kodu (yalnızca özet olarak), oturum belirteci (yalnızca özet olarak).',
-          'İşlem güvenliği bilgileri: IP adresi, giriş ve işlem denemeleri, oturum süresi.',
-          'Kullanıcı içeriği: yazılara yaptığınız yorumlar, beğeniler ve yorum kısıtlaması gibi moderasyon kayıtları.',
+          'Doğrulama bilgileri: şifre özeti, aktivasyon ve şifre sıfırlama kodlarının özetleri, oturum belirtecinin özeti; yönetici hesaplarında iki faktörlü doğrulama için kullanılan kimlik doğrulama sırrı ve son doğrulama kodu.',
+          'İşlem güvenliği bilgileri: IP adresi ve IP adresinden türetilen özetler, giriş/işlem denemeleri, hız sınırlaması kayıtları, oturum bilgileri ve güvenlik amacıyla tutulan yasaklama kayıtları.',
+          'Kullanıcı içeriği: yazılara eklediğiniz yorumlar, beğeniler, yorumların önceki sürümleri (yorum düzenleme geçmişi) ve moderasyon kayıtları.',
           'Doğrudan e-posta veya telefonla iletişime geçmeniz halinde, bu iletişimde paylaştığınız bilgiler.',
         ] },
       ],
@@ -57,7 +57,7 @@ const kvkk: LegalDoc = {
           'Üyelik hesabının oluşturulması, doğrulanması ve yönetilmesi.',
           'Giriş yapılması, oturumun sürdürülmesi ve şifre sıfırlama e-postasının gönderilmesi.',
           'Yorum ve beğeni özelliklerinin sunulması, kötüye kullanımın ve spam’in önlenmesi.',
-          'Site ve hesap güvenliğinin sağlanması, hız sınırlaması ve yetkisiz erişimin engellenmesi.',
+          'Site ve hesap güvenliğinin sağlanması, iki faktörlü doğrulama, hız sınırlaması, kötüye kullanımın tespiti ve yetkisiz erişimin engellenmesi.',
           'Bize ilettiğiniz taleplerin yanıtlanması.',
           'Hukuki yükümlülüklerin yerine getirilmesi.',
         ] },
@@ -69,8 +69,8 @@ const kvkk: LegalDoc = {
         'Kişisel verileriniz KVKK’nın 5. maddesinin 2. fıkrasındaki şu sebeplere dayanılarak işlenir:',
         { list: [
           'Bir sözleşmenin kurulması veya ifasıyla doğrudan ilgili olması (m. 5/2-c): üyelik hesabı ve üyelik sözleşmesi.',
-          'Hukuki yükümlülüğün yerine getirilmesi (m. 5/2-ç): yetkili makamların talepleri, 5651 sayılı Kanun kapsamındaki yükümlülükler.',
-          'Veri sorumlusunun meşru menfaati (m. 5/2-f): site güvenliği, kötüye kullanımın önlenmesi, hız sınırlaması.',
+          'Hukuki yükümlülüğün yerine getirilmesi (m. 5/2-ç): somut olayda veri sorumlusuna uygulanabilen mevzuat yükümlülükleri ve yetkili makamların hukuka uygun talepleri.',
+          'Bir hakkın tesisi, kullanılması veya korunması (m. 5/2-e): gerekli hâllerde uyuşmazlık ve ihlal kayıtlarının değerlendirilmesi. Veri sorumlusunun meşru menfaati (m. 5/2-f): site güvenliği, kötüye kullanımın önlenmesi ve hız sınırlaması; temel hak ve özgürlüklerinize zarar vermemek kaydıyla.',
         ] },
         'Bu sitede pazarlama, profilleme veya reklam amaçlı veri işleme yapılmaz.',
       ],
@@ -90,7 +90,7 @@ const kvkk: LegalDoc = {
           'Resend: yalnızca şifre sıfırlama e-postasının iletilmesi. E-posta adresiniz ve e-postanın içeriği Resend’in sunucularına iletilir; bu sunucular yurt dışında bulunabilir.',
         ] },
         'Yazı tipleri (DM Sans ve Manrope) sitemizin kendi sunucusundan yüklenir. Bu nedenle yazı tipi yüklemesi sırasında IP adresiniz Google’a veya başka bir üçüncü kişiye iletilmez.',
-        'Yukarıdaki hizmet sağlayıcıların bazı sunucuları yurt dışında bulunduğundan, kişisel verileriniz KVKK’nın 9. maddesi uyarınca yurt dışına aktarılabilir. Bu aktarım; yeterli koruma bulunan ülkelere, ya da KVKK’da öngörülen diğer güvencelere (standart sözleşmeler vb.) dayanılarak yapılır. Bu güvencelerin sağlanamadığı hallerde ise yalnızca açık rızanızla aktarım yapılır. Açık rızanızı kayıt ekranında ayrıca vermenizi isteriz; rızanızı istediğiniz zaman geri alabilirsiniz (bkz. Madde 7A, 8 ve 9).',
+        'Cloudflare ve Resend hizmetlerinin kullanımı, kişisel verilerin yurt dışındaki sistemlere aktarılmasını veya bu sistemlerden erişilmesini gerektirebilir. Böyle bir aktarım, yalnızca aktarım tarihinde KVKK’nın 9. maddesinde öngörülen geçerli aktarım şartlarından biri ve gerekli güvenceler sağlanmışsa gerçekleştirilir. Uygunluk kararı, uygun güvence (ör. usulüne uygun standart sözleşme) veya kanundaki sınırlı arızi aktarım şartları somut hizmet ve aktarım bakımından ayrıca değerlendirilmelidir. Bu metin, tek başına belirli bir ülke için yeterlilik kararı bulunduğunu ya da standart sözleşme imzalandığını beyan etmez. Aktarımın hukuki dayanağı ve ilgili alıcı kategorileri hakkında bilgi talep edebilirsiniz.',
         'Ayrıca yasal bir zorunluluk halinde yetkili kamu kurum ve kuruluşlarıyla paylaşım yapılabilir.',
       ],
     },
@@ -98,21 +98,21 @@ const kvkk: LegalDoc = {
       title: '7. Saklama süreleri',
       blocks: [
         { list: [
-          'Oturum çerezi ve oturum kaydı: en fazla 7 gün veya çıkış yapana kadar.',
-          'Aktivasyon kodu: en fazla 48 saat ve tek kullanımlık.',
+          'Oturum çerezi ve oturum kaydı: oturum çerezi en fazla 7 gün geçerlidir; oturum kaydı süresi dolduğunda veya çıkış yapıldığında temizlenir.',
+          'Aktivasyon kodu: kullanılmadığında en fazla 48 saat; kullanılmış kodun kaydı en fazla 7 gün sonra temizlenir.',
           'Şifre sıfırlama bağlantısı: en fazla 30 dakika ve tek kullanımlık.',
-          'Hız sınırlaması kayıtları: kısa süreli, süre dolunca geçersiz olur.',
-          'Hesap, yorum ve beğeni verileri: üyeliğiniz sürdüğü veya silme talebinde bulunana kadar.',
-          'Yasal saklama yükümlülüğü bulunan veriler: ilgili mevzuatta öngörülen süre kadar.',
+          'Hız sınırlaması kayıtları: ilgili deneme penceresi sona erdiğinde temizlenir.',
+          'Hesap, yorum ve beğeni verileri: üyelik sürdüğü ve ilgili hizmet amaçları devam ettiği sürece; hesap kapatma veya silme talepleri, yasal yükümlülükler ve üçüncü kişilerin hakları dikkate alınarak değerlendirilir. Yorum düzenleme geçmişi ve moderasyon/yasaklama kayıtları, güvenlik veya olası uyuşmazlık için gerekli oldukları süreyle sınırlı tutulur ve gereklilikleri düzenli olarak gözden geçirilmelidir.',
+          'Yasal saklama veya bir hakkın tesisi, kullanılması ya da korunması için tutulması gereken kayıtlar: ilgili yükümlülük veya ihtiyacın devam ettiği süre kadar.',
         ] },
-        'Süre sonunda verileriniz silinir, yok edilir veya anonim hale getirilir.',
+        'Saklama amacı sona erdiğinde ve başka bir hukuki saklama sebebi bulunmadığında veriler silinir, yok edilir veya anonim hâle getirilir. Yorum geçmişi ve moderasyon kayıtları için uygulanan süreler ayrıca belirlenmeli ve bu metinle uyumlu biçimde işletilmelidir.',
       ],
     },
     {
-      title: '7A. Açık rıza ve geri alma',
+      title: '7A. Yurt dışına aktarım ve açık rıza',
       blocks: [
-        'Kişisel verilerinizin yurt dışına aktarılmasının, KVKK’nın 9. maddesinde öngörülen koşulların sağlanamadığı durumlarda, yalnızca açık rızanıza dayanarak yapılmasını öngörüyoruz. Kayıt ve aktivasyon sırasında verdiğiniz açık rıza, ayrıca “Aydınlatma Metni okudum” onayından bağımsızdır.',
-        `Açık rızanızı dilediğiniz zaman ${EMAIL} adresine e-posta göndererek geri alabilirsiniz. Geri alma, geri alma tarihinden önce yapılmış işlemleri etkilemez. Rızanızı geri alırsanız, hesabınızın çalışması için gerekli olan aktarımlar (örneğin giriş ve şifre sıfırlama) sınırlanabilir.`,
+        'Açık rıza, sürekli veya olağan yurt dışı veri aktarımının genel ve otomatik hukuki dayanağı olarak kullanılmaz. KVKK’nın 9. maddesindeki aktarım şartları ve güvenceler sağlanmalıdır. Açık rıza ancak kanunda öngörülen istisnai aktarım şartlarının somut olayda mevcut olması hâlinde, belirli aktarım için ayrı, bilgilendirilmiş ve özgür iradeye dayalı şekilde alınabilir. Aydınlatma yapılması, açık rıza alınmasıyla aynı işlem değildir; aydınlatma metnini okuduğunuza dair onay vermeniz, veri işlemenin hukuki sebebi olarak açık rıza verdiğiniz anlamına gelmez.',
+        `Somut bir işlem için açık rıza alınması gereken istisnai bir durum oluşursa, aktarımın amacı, alıcısı, kapsamı ve rızayı geri alma yöntemi ayrıca açıklanır. Böyle bir rıza, ${EMAIL} adresine başvurarak geri alınabilir; geri alma, geri alma öncesinde hukuka uygun şekilde gerçekleştirilmiş işlemleri geriye dönük olarak geçersiz kılmaz.`,
       ],
     },
     {
@@ -161,8 +161,9 @@ const gizlilik: LegalDoc = {
         { list: [
           'Hesap bilgileri: kullanıcı adı ve e-posta adresi.',
           'Şifreniz düz metin olarak saklanmaz; yalnızca geri döndürülemez özet olarak tutulur ve yöneticiler dahil kimse tarafından görüntülenemez.',
-          'Yorumlarınız ve beğenileriniz.',
-          'Güvenlik amacıyla IP adresi. Misafir beğenilerinde ve IP yasaklarında IP adresi doğrudan değil, özeti alınarak kullanılır.',
+          'Yönetici hesaplarında iki faktörlü doğrulama için kullanılan kimlik doğrulama sırrı ve son doğrulama kodu güvenlik amacıyla işlenir.',
+          'Yorumlarınız, yorum düzenleme geçmişiniz ve beğenileriniz.',
+          'Güvenlik amacıyla IP adresi ve bundan türetilen özetler; bazı hız sınırlaması kayıtlarında IP adresi doğrudan anahtarın parçası olarak kullanılabilir.',
         ] },
         'Reklam, takip veya kullanıcı profilleme amacıyla bilgi toplamıyoruz. Üçüncü taraf analiz veya reklam araçları kullanmıyoruz.',
       ],
@@ -170,27 +171,27 @@ const gizlilik: LegalDoc = {
     {
       title: '3. Bilgilerin kullanımı',
       blocks: [
-        'Bilgileriniz yalnızca hesabınızı yönetmek, giriş yapmanızı sağlamak, şifre sıfırlama e-postası göndermek, yorum ve beğeni özelliklerini sunmak ve siteyi kötüye kullanıma karşı korumak için kullanılır.',
+        'Bilgileriniz hesabınızı yönetmek, giriş ve iki faktörlü doğrulamayı sağlamak, şifre sıfırlama e-postası göndermek, yorum ve beğeni özelliklerini sunmak, moderasyonu yürütmek ve siteyi kötüye kullanıma karşı korumak için kullanılır.',
       ],
     },
     {
       title: '4. Çerezler',
       blocks: [
-        'Çerez, ziyaret ettiğiniz sitenin tarayıcınıza kaydettiği küçük bir metin dosyasıdır. Sitemiz şu çerezleri kullanır:',
+        'Çerez, ziyaret ettiğiniz sitenin tarayıcınıza kaydettiği küçük bir metin dosyasıdır. Uygulama kodunda görülen birinci taraf oturum çerezi şudur:',
         { list: [
-          'Zorunlu Çerezler (sa_session): Giriş yaptığınızda oluşturulur, oturumunuzu tanımak için kullanılır. Analiz veya pazarlama amacıyla kullanılmaz. Çıkış yaptığınızda veya süresi dolduğunda (en fazla 7 gün) silinir.',
+          'Zorunlu oturum çerezi (sa_session): Başarılı girişte oluşturulur; HttpOnly, Secure ve SameSite=Lax nitelikleriyle gönderilir. Oturum belirtecini tanımak için kullanılır, uygulama tarafından analiz veya pazarlama amacıyla kullanılmaz ve en fazla 7 gün geçerlidir. Çıkışta geçersiz kılınır.',
         ] },
-        'Çerez tercihlerinizi sitemize ilk girişinizde karşınıza çıkan onay ekranından yönetebilirsiniz. Tarayıcı ayarlarınızdan çerezleri tamamen silebilir veya engelleyebilirsiniz; ancak bu durumda giriş yapamazsınız.',
+        'Sitedeki bilgilendirme penceresi bir çerez izni toplamaz; yalnızca bilgilendirme mesajının kapatıldığını tarayıcının yerel depolama alanında hatırlayabilir. Bu kayıt bir çerez değildir ve isteğe bağlı izleme çerezleri için tercih yönetimi anlamına gelmez. Tarayıcı ayarlarınızdan zorunlu oturum çerezini engellerseniz giriş ve oturum özellikleri çalışmayabilir.',
       ],
     },
     {
       title: '5. Üçüncü taraf hizmetler',
       blocks: [
         { list: [
-          'Cloudflare: sitenin barındırılması, veritabanı ve ağ güvenliği.',
-          'Resend: şifre sıfırlama e-postasının gönderilmesi.',
+          'Cloudflare: sitenin barındırılması, D1 veritabanı, ağ güvenliği ve isteklerin iletilmesi. Hizmetin yapılandırmasına bağlı olarak teknik bağlantı verileri işlenebilir.',
+          'Resend: şifre sıfırlama e-postalarının iletilmesi; bu işlem için alıcının e-posta adresi ve e-posta içeriği hizmete aktarılır.',
         ] },
-        'Manrope ve DM Sans yazı tipleri sitemizin kendi sunucusundan yüklenir; Google’a bağlantı kurulmaz. Üçüncü taraf analiz veya reklam araçları kullanmıyoruz.',
+        'Manrope ve DM Sans yazı tipleri sitemizin kendi sunucusundan yüklenir. Uygulama kodunda üçüncü taraf analiz veya reklam aracı tespit edilmemiştir; Cloudflare güvenlik yapılandırmasının oluşturabileceği teknik çerezler ve canlı ortamda etkinleştirilmiş diğer hizmetler ayrıca kontrol edilmelidir.',
       ],
     },
     {
@@ -256,19 +257,19 @@ const kosullar: LegalDoc = {
     {
       title: '5. Kullanıcı içerikleri',
       blocks: [
-        'Yaptığınız yorumlardan siz sorumlusunuz. Yorum yaparak, içeriğinizin Sitede yayımlanması için gerekli sınırlı kullanım izni vermiş olursunuz. Kurallara aykırı içerikler önceden bildirim yapılmaksızın kaldırılabilir; ihlal halinde yorum yapma yetkiniz geçici veya kalıcı olarak kısıtlanabilir.',
+        'Yorumların fikrî hakları ve hukuki sorumluluğu, yürürlükteki mevzuatın izin verdiği ölçüde içeriği oluşturan kullanıcıya aittir. Yorum göndererek, Site sahibine yorumu Sitede barındırmak, görüntülemek, teknik olarak çoğaltmak, yedeklemek ve moderasyon/güvenlik amacıyla incelemek için gerekli, münhasır olmayan, bedelsiz ve yalnızca bu hizmetin sunulmasıyla sınırlı bir kullanım izni verirsiniz. Bu izin, yorumun mülkiyetini Site sahibine devretmez. Hukuka veya bu koşullara aykırı içerik kaldırılabilir; kullanıcı, kaldırma veya kısıtlama kararına ilişkin gerekçeli inceleme talebini iletişim adresine iletebilir.',
       ],
     },
     {
       title: '6. Sorumluluğun sınırlandırılması',
       blocks: [
-        'Site “olduğu gibi” sunulur. Kesintisiz veya hatasız çalışacağı garanti edilmez; bakım, güncelleme veya teknik nedenlerle erişim geçici olarak durdurulabilir. Yasaların izin verdiği ölçüde, Sitenin kullanımından veya kullanılamamasından doğan dolaylı zararlardan sorumluluk kabul edilmez. Üçüncü taraf sitelere verilen bağlantıların içeriğinden sorumlu değiliz.',
+        'Site, teknik bakım, güvenlik ve güncelleme çalışmaları nedeniyle geçici olarak erişilemez olabilir. Site sahibi, yürürlükteki emredici mevzuattan doğan sorumlulukları saklı kalmak üzere, kesintisiz veya hatasız çalışma taahhüdünde bulunmaz. Kanunen sınırlandırılamayan sorumluluklar bu hükmün dışındadır. Üçüncü taraf sitelere verilen bağlantıların içeriği ilgili üçüncü tarafların sorumluluğundadır.',
       ],
     },
     {
       title: '7. Değişiklikler',
       blocks: [
-        'Bu koşullar önceden duyuru yapılmaksızın güncellenebilir. Güncel sürüm bu sayfada yayımlanır; Siteyi kullanmaya devam etmeniz güncel koşulları kabul ettiğiniz anlamına gelir.',
+        'Koşullardaki değişiklikler bu sayfada yayımlanır ve yürürlük tarihi belirtilir. Esaslı değişiklikler, uygulanmadan önce Site içinde uygun bir yöntemle duyurulur. Değişiklikleri kabul etmeyen kullanıcı Siteyi kullanmayı bırakabilir; üyeler hesap kapatma talebinde bulunabilir. Zorunlu tüketici ve sözleşme hükümleri saklıdır.',
       ],
     },
     {
@@ -342,19 +343,19 @@ const uyelik: LegalDoc = {
     {
       title: '6. Kullanıcı içerikleri',
       blocks: [
-        'Yorumlarınızın hukuki sorumluluğu size aittir. Yorum yaparak, içeriğinizin Sitede yayımlanması ve moderasyonu için gerekli sınırlı, münhasır olmayan kullanım izni verirsiniz. İçeriğinizi silme talebiniz KVKK Aydınlatma Metni’ndeki yöntemle iletilebilir.',
+        'Yorumların hukuki sorumluluğu, yürürlükteki mevzuatın izin verdiği ölçüde içeriği oluşturan üyeye aittir. Üye, yorum göndererek Site sahibine içeriği yalnızca Sitede barındırma, görüntüleme, teknik olarak çoğaltma, yedekleme ve moderasyon/güvenlik amacıyla inceleme için gerekli, münhasır olmayan ve bedelsiz kullanım izni verir. Bu izin yorum üzerindeki hakların devri anlamına gelmez. Üye, içeriğinin kaldırılması veya düzeltilmesi için ${EMAIL} adresine başvurabilir; hukuki saklama veya uyuşmazlık gereklilikleri ayrıca değerlendirilir.',
       ],
     },
     {
       title: '7. Süre ve fesih',
       blocks: [
-        'Sözleşme, süresiz olarak yürürlüğe girer. Üye, hesabının kapatılmasını istediğini e-posta ile bildirerek dilediği zaman sözleşmeyi feshedebilir. Site Sahibi, sözleşmenin ihlali halinde hesabı derhal askıya alabilir veya sonlandırabilir. Fesih halinde, yasal saklama yükümlülüğü olan veriler hariç, hesap verileriniz makul süre içinde silinir veya anonim hale getirilir.',
+        `Sözleşme, üyelik onayıyla yürürlüğe girer ve üyelik sürdüğü müddetçe devam eder. Üye, ${EMAIL} adresine başvurarak hesabının kapatılmasını isteyebilir. Site sahibi, güvenlik veya sözleşme ihlali şüphesinde ölçülü ve gerekli geçici kısıtlamalar uygulayabilir; mümkün olduğunda üyeye gerekçe ve itiraz/inceleme yolu bildirilir. Hesap kapatıldığında kişisel veriler, silme talebi ve saklama yükümlülükleri değerlendirilerek silinir, yok edilir veya anonim hâle getirilir; yorum geçmişi ve moderasyon kayıtları için gerekli saklama ayrıca değerlendirilir.`,
       ],
     },
     {
       title: '8. Değişiklikler',
       blocks: [
-        'Site Sahibi sözleşmeyi güncelleyebilir. Esaslı değişiklikler Sitede duyurulur. Değişiklikleri kabul etmiyorsanız üyeliğinizi sonlandırabilirsiniz.',
+        'Site sahibi sözleşme değişikliklerini güncel metni ve yürürlük tarihini yayımlayarak duyurur. Esaslı değişiklikler yürürlüğe girmeden önce üyeye uygun bir bildirim yöntemiyle iletilir. Değişiklikleri kabul etmeyen üye, hesabının kapatılmasını isteyebilir.',
       ],
     },
     {
@@ -388,7 +389,7 @@ const kunye: LegalDoc = {
           `Alan adı: ${SITE}`,
           `E-posta: ${EMAIL}`,
         ] },
-        'Site sahibi, bu sitenin içerik sağlayıcısı ve yer sağlayıcısıdır.',
+        'Site sahibi, kendi oluşturduğu veya yayımladığı içerik bakımından içerik sağlayıcısıdır. Sitenin teknik barındırma altyapısı Cloudflare tarafından sağlanır. Bu altyapı sağlayıcısının bulunması, Site sahibinin 5651 sayılı Kanun kapsamındaki hukuki statüsünü tek başına belirlemez.',
       ],
     },
     {
