@@ -18,11 +18,21 @@ const personSchema = {
   '@context': 'https://schema.org',
   '@type': 'Person',
   name: 'Semih Algan',
-  url: 'https://semihalgan.com.tr',
-  birthDate: '2011-05-26',
+  url: siteUrl,
   jobTitle: 'Yazılım Geliştirici',
-  sameAs: ['https://semihalgan.com.tr'],
 }
+
+const websiteSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'WebSite',
+  name: 'Semih Algan',
+  alternateName: 'semihalgan.com.tr',
+  url: siteUrl,
+  inLanguage: 'tr-TR',
+  publisher: { '@id': `${siteUrl}/#person` },
+}
+
+const personSchemaWithId = { ...personSchema, '@id': `${siteUrl}/#person` }
 
 // TanStack Router sayfa geçişlerinde tetiklenen şık yükleme çubuğu
 function RouterLoadingBar() {
@@ -82,6 +92,14 @@ export const Route = createRootRoute({
         content: 'website',
       },
       {
+        property: 'og:site_name',
+        content: 'Semih Algan',
+      },
+      {
+        property: 'og:locale',
+        content: 'tr_TR',
+      },
+      {
         property: 'og:url',
         content: siteUrl,
       },
@@ -106,6 +124,14 @@ export const Route = createRootRoute({
         content: 'summary_large_image',
       },
       {
+        name: 'twitter:title',
+        content: siteName,
+      },
+      {
+        name: 'twitter:description',
+        content: siteDescription,
+      },
+      {
         name: 'twitter:image',
         content: ogImage,
       },
@@ -123,7 +149,11 @@ export const Route = createRootRoute({
       },
       {
         type: 'application/ld+json',
-        children: JSON.stringify(personSchema),
+        children: JSON.stringify(personSchemaWithId),
+      },
+      {
+        type: 'application/ld+json',
+        children: JSON.stringify(websiteSchema),
       },
       {
         children: `
