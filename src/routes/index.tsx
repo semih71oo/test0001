@@ -9,6 +9,27 @@ import { softwareList } from '../lib/software'
 import { ArrowDown, ArrowDownRight, ArrowRight, ArrowUpRight, Check, Code2, Copy, Dribbble, Mail, MapPin, Menu, MessageCircle, Puzzle, Sparkles, X, ChevronRight } from 'lucide-react'
 
 export const Route = createFileRoute('/')({
+  head: () => ({
+    links: [{ rel: 'canonical', href: 'https://semihalgan.com.tr/' }],
+    meta: [
+      { title: 'Semih Algan — Yazılım Geliştirici' },
+      {
+        name: 'description',
+        content: 'Semih Algan’ın kişisel yazılım portfolyosu. Geliştirdiğim yazılımları keşfedin, hakkımda bilgi edinin ve iletişime geçin.',
+      },
+      { property: 'og:url', content: 'https://semihalgan.com.tr/' },
+      { property: 'og:title', content: 'Semih Algan — Yazılım Geliştirici' },
+      {
+        property: 'og:description',
+        content: 'Semih Algan’ın kişisel yazılım portfolyosu. Geliştirdiğim yazılımları keşfedin, hakkımda bilgi edinin ve iletişime geçin.',
+      },
+      { name: 'twitter:title', content: 'Semih Algan — Yazılım Geliştirici' },
+      {
+        name: 'twitter:description',
+        content: 'Semih Algan’ın kişisel yazılım portfolyosu. Geliştirdiğim yazılımları keşfedin, hakkımda bilgi edinin ve iletişime geçin.',
+      },
+    ],
+  }),
   component: HomePage,
 })
 
