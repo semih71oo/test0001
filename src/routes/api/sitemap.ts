@@ -1,67 +1,98 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { env } from 'cloudflare:workers'
+import { softwareList } from '../../lib/software'
 
 type Bindings = { DB: D1Database }
+
+const SITE_URL = 'https://semihalgan.com.tr'
+
+function xmlEscape(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;')
+}
+
+function sitemapDate(value: number): string | null {
+  if (!Number.isFinite(value) || value <= 0) return null
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date.toISOString()
+}
 
 export const Route = createFileRoute('/api/sitemap')({
   server: {
     handlers: {
       GET: async () => {
-        let posts: { id: string; updated_at: number }[] = []
+        const DB = (env as unknown as Bindings).DB
+
+        // posts tablosu mevcut şemada herkese açık yazıları tutar.
+        // Proje detayları D1 tablosunda değil, src/lib/software.ts içinde tanımlıdır.
+        let posts: { id: string; updated_at: number }[]
         try {
-          // Cloudflare D1 veritabanından tüm yazıların ID ve tarihlerini çekiyoruz
-          const DB = (env as unknown as Bindings).DB
-          const result = await DB.prepare('SELECT id, updated_at FROM posts ORDER BY created_at DESC').all<{ id: string; updated_at: number }>()
-          posts = result.results
-        } catch (err) {
-          console.error('Sitemap DB hatası:', err)
+          const result = await DB.prepare(
+            'SELECT id, updated_at FROM posts ORDER BY created_at DESC',
+          ).all<{ id: string; updated_at: number }>()
+          posts = result.results ?? []
+        } catch (error) {
+          console.error('Sitemap için D1 yazıları okunamadı:', error)
+          return new Response('Sitemap geçici olarak oluşturulamadı.', {
+            status: 503,
+            headers: {
+              'Content-Type': 'text/plain; charset=utf-8',
+              'Cache-Control': 'no-store',
+            },
+          })
         }
-        
-        const baseUrl = 'https://semihalgan.com.tr'
-        
-        // Sitenizdeki sabit/statik sayfalar
+
         const staticPages = [
-          { path: '/', priority: '1.0' },
-          { path: '/yazilar', priority: '0.9' },
-          { path: '/guncellemeler', priority: '0.8' },
-          { path: '/yazilimlar', priority: '0.8' },
-          { path: '/yazilimlar/not', priority: '0.7' },
-          { path: '/kunye', priority: '0.5' },
-          { path: '/kvkk', priority: '0.5' },
-          { path: '/gizlilik', priority: '0.5' },
-          { path: '/kullanim-kosullari', priority: '0.5' },
-          { path: '/uyelik-sozlesmesi', priority: '0.5' }
+          '/',
+          '/yazilar',
+          '/guncellemeler',
+          '/yazilimlar',
+          '/kunye',
+          '/kvkk',
+          '/gizlilik',
+          '/kullanim-kosullari',
+          '/uyelik-sozlesmesi',
         ]
 
-        let xml = `<?xml version="1.0" encoding="UTF-8"?>\n`
-        xml += `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`
+        const urls: string[] = []
 
-        // Statik sayfaları XML'e ekle
-        for (const page of staticPages) {
-          xml += `  <url>\n`
-          xml += `    <loc>${baseUrl}${page.path}</loc>\n`
-          xml += `    <changefreq>weekly</changefreq>\n`
-          xml += `    <priority>${page.priority}</priority>\n`
-          xml += `  </url>\n`
+        for (const path of staticPages) {
+          urls.push(`  <url><loc>${SITE_URL}${path}</loc></url>`)
         }
 
-        // Dinamik blog yazılarını XML'e ekle
+        // Sadece yayındaki ve ana sitede gerçek detay sayfası bulunan projeler.
+        for (const project of softwareList) {
+          if (project.status !== 'Yayında') continue
+          urls.push(`  <url><loc>${SITE_URL}${xmlEscape(project.href)}</loc></url>`)
+        }
+
         for (const post of posts) {
-          const date = new Date(post.updated_at).toISOString().split('T')[0]
-          xml += `  <url>\n`
-          xml += `    <loc>${baseUrl}/yazilar/${post.id}</loc>\n`
-          xml += `    <lastmod>${date}</lastmod>\n`
-          xml += `    <changefreq>monthly</changefreq>\n`
-          xml += `    <priority>0.7</priority>\n`
-          xml += `  </url>\n`
+          const lastmod = sitemapDate(post.updated_at)
+          const loc = `${SITE_URL}/yazilar/${encodeURIComponent(post.id)}`
+          urls.push(
+            lastmod
+              ? `  <url><loc>${loc}</loc><lastmod>${lastmod}</lastmod></url>`
+              : `  <url><loc>${loc}</loc></url>`,
+          )
         }
 
-        xml += `</urlset>`
+        const xml = [
+          '<?xml version="1.0" encoding="UTF-8"?>',
+          '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+          ...urls,
+          '</urlset>',
+        ].join('\n')
 
         return new Response(xml, {
           headers: {
             'Content-Type': 'application/xml; charset=utf-8',
-            'Cache-Control': 'public, max-age=3600', // 1 saat önbellek
+            // Tarayıcıda yeniden doğrula; Cloudflare edge'de 1 saat tut.
+            'Cache-Control': 'public, max-age=0, s-maxage=3600, stale-while-revalidate=86400',
+            'X-Content-Type-Options': 'nosniff',
           },
         })
       },
